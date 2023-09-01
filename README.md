@@ -8,8 +8,8 @@ Powered by Pinecone and OpenAI
 - Create a pinecone/.env file with the following variables:
 
 ```
-OPENAIKEY =
-PINECONEKEY =
+OPENAIKEY = '...'
+PINECONEKEY = '...'
 ```
 
 - run ```pip install -r requirements.txt```
