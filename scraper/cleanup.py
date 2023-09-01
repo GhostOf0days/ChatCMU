@@ -5,7 +5,7 @@ import os
 def cleanup(path):
     files = os.listdir(path)
     for file in files:
-        with open(path + file) as f:
+        with open(path + file, encoding='utf-8') as f:
             words = f.read().split()
             if len(words) < 10:
                 os.remove(path + file)

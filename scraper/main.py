@@ -32,7 +32,7 @@ def get_urls(url, key):
 
 # write all p tags to a file
 def write_to_file(p_tags, file_name):
-    with open(file_name, 'w') as f:
+    with open(file_name, 'w', encoding='utf-8') as f:
         for p in p_tags:
             f.write(p.text)
 
