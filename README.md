@@ -2,10 +2,6 @@
 
 Powered by Pinecone and OpenAI
 
-## Example:
-
-https://ChatCMU.com/
-
 # How to use
 
 - Clone this repo
