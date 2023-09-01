@@ -16,7 +16,7 @@ OPENAIKEY =
 PINECONEKEY =
 ```
 
-- add you source urls to scraper/main.py
+- add your source urls to scraper/main.py
 - run scraper/main.py
 - run pinecone/embedings.ipynb
 - host pinecone/index.html on your website
