@@ -17,7 +17,7 @@ def delete_duplicate_and_empty_files(directory):
     file_hashes = {}
     files_to_delete = []
 
-    # Step 1: List all files
+    # List all files
     for filename in os.listdir(directory):
         file_path = os.path.join(directory, filename)
         
@@ -46,11 +46,9 @@ def delete_duplicate_and_empty_files(directory):
         print(f"Deleting duplicate file: {file_path}")
         os.remove(file_path)
 
-# Get the parent directory of the current script
 parent_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Define the 'text' directory under the same parent directory
 text_directory = os.path.join(parent_directory, 'text')
 
-# Run the function
 delete_duplicate_and_empty_files(text_directory)

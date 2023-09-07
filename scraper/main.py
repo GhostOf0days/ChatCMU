@@ -1,6 +1,16 @@
 import requests
 from bs4 import BeautifulSoup
 
+# Define a list of unwanted file extensions
+unwanted_extensions = ['.doc', '.ppt', '.pdf', '.xls']
+
+# Function to check if a URL has an unwanted file extension
+def has_unwanted_extension(url):
+    for extension in unwanted_extensions:
+        if url.endswith(extension):
+            return True
+    return False
+
 
 # get all text from a url
 def get_p_tags(url):
@@ -16,7 +26,7 @@ def get_p_tags(url):
     return text
 
 # get all urls from a url. make sure they contain cmu.edu
-def get_urls(url, key):
+def get_urls(url, key, exclude_key):
     try:
         r = requests.get(url)
     except:
@@ -26,7 +36,7 @@ def get_urls(url, key):
     for link in soup.find_all('a'):
         href = link.get('href')
         if href is not None:
-            if key in href:
+            if key in href and key in href and not href.startswith(exclude_key) and not has_unwanted_extension(href):
                 urls.append(href)
     return urls
 
@@ -37,6 +47,7 @@ def write_to_file(p_tags, file_name):
             f.write(p.text)
 
 key = "cmu.edu"
+exclude_key = "https://lists.andrew.cmu.edu/mailman/listinfo"
 path = "../text/"
 urls = [
     "https://www.cmu.edu/",
@@ -47,7 +58,7 @@ urls = [
     "https://www.cmu.edu/admission/majors-programs/school-of-computer-science",
     "https://www.cmu.edu/admission/majors-programs/information-systems",
     "https://tartanconnect.cmu.edu/club_signup",
-    "https://scottylabs.org/"
+    "https://scottylabs.org/",
     "https://cmueats.com"
     
     ]
@@ -65,5 +76,5 @@ while (len(urls) != 0):
     p_tags = get_p_tags(url)
     print(url)
     write_to_file(p_tags, path + str(counter) + ".txt")
-    urls += get_urls(url, key)
+    urls += get_urls(url, key, exclude_key)
     counter += 1
