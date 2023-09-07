@@ -15,7 +15,7 @@ PINECONEKEY = '...'
 - run ```pip install -r requirements.txt```
 - add your source urls to scraper/main.py
 - create a folder named `text`
-- run scraper/main.py
+- run scraper/scraper.py
 - run scraper/cleanup.py
 - run pinecone/embedings.ipynb
 - host pinecone/index.py on your website
