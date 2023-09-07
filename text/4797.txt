@@ -1,0 +1,4478 @@
+AMS CitationJustice, D., and Mellinger, A., 2023: The Need for Quantum Software Architecture. Carnegie Mellon University, Software Engineering Institute's Insights (blog), Accessed September 7, 2023, https://doi.org/10.58012/hqd8-zr24.APA CitationJustice, D., & Mellinger, A. (2023, August 28). The Need for Quantum Software Architecture. Retrieved September 7, 2023, from https://doi.org/10.58012/hqd8-zr24.Chicago CitationJustice, Daniel, and Andrew Mellinger. "The Need for Quantum Software Architecture." Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, August 28, 2023. https://doi.org/10.58012/hqd8-zr24.IEEE CitationD. Justice, and A. Mellinger, "The Need for Quantum Software Architecture," Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, 28-Aug-2023 [Online]. Available: https://doi.org/10.58012/hqd8-zr24. [Accessed: 7-Sep-2023].BibTeX Code@misc{justice_2023,author={Justice, Daniel and Mellinger, Andrew},title={The Need for Quantum Software Architecture},month={Aug},year={2023},howpublished={Carnegie Mellon University, Software Engineering Institute's Insights (blog)},url={https://doi.org/10.58012/hqd8-zr24},note={Accessed: 2023-Sep-7}}
+Quantum Computing
+As the SEI embarks on a new project, Quantum Software Architecture, we’re setting out to answer an important question: If we want to adapt or build systems today that will one day use quantum hardware, how will that change our current approach to software architecture? In this blog post, we will discuss what a quantum computer is, the advantages quantum computing promises, and the concerns architects are likely to have when integrating quantum components into their systems.When software architecture coalesced as a distinct discipline in the 1990s, it brought structure—and with it, efficiency, quality, and long-term viability—to software projects that were previously characterized by scaling challenges, inconsistencies, poor integration, and ad hoc approaches to design and construction. Over the years, software architecture has been extended and applied to various domains to address specific challenges and requirements, including cloud computing, cybersecurity, and machine learning.The job of a modern software architect is to look at the overall system and choose what patterns, styles, and tactics best support not only the technical needs, but also the business needs, such as cost, staffing, and risks. They must do all this in a way that lets them evolve their product over (hopefully) years.Although quantum computers are becoming viable, it is unclear how they will manifest commercially. Many companies are trying to build the computing hardware, programming languages, and supporting tools; some service providers even offer access to their quantum computers. But how does an architect integrate or use these things with their system? Why would they? What benefits do these advances bring and with what costs?Are quantum computers just going to fit in like another database or compute node? Do they require special handling? How secure are they? Reliable? Performant? How do architects prepare their systems for using quantum computers?As organizations increasingly look to quantum computing for its potential to solve complex problems, applying software architecture principles to quantum computing can help manage complexity, achieve scalability and performance optimization, enable interoperability, support reliability and security, and promote collaboration and knowledge sharing. Software architecture provides a structured approach to designing quantum software systems that can effectively harness the power of quantum technologies.In our research project, Quantum Software Architecture, we are working to understand, document, and communicate the unique differences and challenges associated with incorporating quantum technologies into existing systems. We aim to identify and document useful, and potentially unique, abstractions and strategies for integrating quantum technologies in an existing system, with the goal of promoting successful adoption of these components.Like early-stage blockchain or AI, quantum technology is caught in a hype cycle of inflated expectations, followed by skepticism; it will be some time before quantum moves into genuine progress. For that potential to be realized, it's crucial to discern between the genuine promise of quantum and the buzz surrounding it. Quantum technologies promise us sensors, computers, and communication with capabilities that far exceed our current technologies. With the expected increases in compute power, applications previously constrained by classical compute limitations will become practical.The flagship example of gains promised by quantum computers is the breaking of RSA-2048, an encryption scheme widely used today. Cracking the code requires factoring a 2,048-bit number, which would take current computers on the order of trillions of years to compute. Quantum computers are expected to be able to perform the same computation within hours or perhaps seconds. This potential leap in efficiency still demonstrates the impressive powers of quantum technologies.The quantum promise is very narrow in scope, and this narrowness is one of the reasons why quantum computers will not be replacing classical computers but will instead be used as accelerating co-processors like graphics processing units (GPUs) or video cards. There is no advantage in performing basic computations, such as addition, multiplication, and division, on a quantum computer. Instead, quantum can offer improvements for algorithms requiring optimizations, searches, Fourier transforms, and prime factorization. Applications that can benefit from these algorithms are portfolio optimizations, machine learning, drug discovery, and logistics optimization. Applications in encryption breaking and chemistry and material science are exceptionally promising.While there are some possibilities for quantum computers to speed up specific, existing large computations, their most profound promise lies in leveraging their ability to compute all variations of the solution at precisely the same time to unlock new frontiers of computation and tackle currently incalculable problems.In understanding quantum computers and how they work with classical computers, it is helpful to consider the GPU. The GPU started off as a video card. Users did not directly interact with the video card, but instead with the CPU that used it. The same is true for quantum technologies. The quantum processing unit (QPU) will not be directly accessible by a user and requires a controller (often called a quantum controller). It is this combination of quantum controller and QPU together that we refer to as a quantum computer or QC.Systems architects should expect to see quantum computers presented much like GPU instances or offerings are provided today. GPU instances include a compute or controller node with some number of CPUs, some memory, and some set of GPU resources. Similarly, a QC will have a controller with some number of classical CPUs, memory, and an attached QPU.Where a QPU differs from a GPU is in how it accelerates a computation. GPUs use specialized hardware architecture designed to efficiently run the same small mathematical processes over and over across many cores in parallel. QPUs accelerate computation by giving access to a new class of algorithms (bounded-error quantum polynomial time or BQP) through the use of superposition, entanglement, and interference. This class of algorithms, while few in number, offers quadratic and exponential speedups to their classical counterparts.As quantum compute technology advances and becomes more complex, planning for its integration becomes increasingly pressing for the Department of Defense. In our work exploring software architectures for systems with quantum components, our goal is to provide a foundation for developing effective software architectures that optimize quantum technology capabilities while managing its demands. We aim to understand, document, and communicate the unique differences and challenges associated with incorporating quantum technologies into existing systems. We will identify and document useful, potentially unique, abstractions and strategies for integrating quantum technologies in an existing system, with the goal of promoting successful adoption of these components. Here is what we are learning along the way.Quantum computers do not use bits or bytes, such as in classical computers, but instead use quantum bits or qubits. Qubits do not store single bits of data in a state of 0 or 1; instead they assume a state of superposition, an intermediate stage between 0 and 1—akin to the concept embodied in Schrödinger's Cat. The superpositioned state of a qubit, much like the cat's fate inside the box, remains inaccessible to us. Upon reading the qubit, the state collapses into a classical 0 or 1, resulting in the loss of all information within the quantum state.Compounding the problem, the lifespan of data on qubits is exceptionally brief. As of February 2022, lifespans of 10-100 milliseconds are common, with the longest recorded lifespan reaching five seconds. Calculations must be performed swiftly within this time frame, limiting the types of computation that can be done, and the data must be reloaded after each computation.As such, loading data onto a QPU is an essential part of the process and is required for every computation. In the worst case, data loading requires an exponential amount of time, effectively negating any potential quantum speedup. In the future, quantum sensors will make it possible to feed data directly into the QC.Discovery and utilization of methods to efficiently load useful data onto a QPU are paramount for finding quantum advantage over purely classical systems.A fundamental construct of quantum computing is the quantum circuit. Executing a quantum algorithm often requires the creation of an appropriate circuit, a process like the classical approach where a logic-gate-filled circuit is devised for each computation. This process is akin to repeatedly reconfiguring a field-programmable gate array (FPGA) or programming an analog computer for each individual use case.Quantum circuits are then compiled down into machine code specifically tailored for a target QPU. This translation from high-level algorithm design to low-level machine code can be seen in frameworks such as IBM’s where OpenQASM is compiled down to Qiskit-Pulse.The choices made during the generation and optimization of these quantum circuits—such as the selection of the quantum programming language, error correction mechanisms, or the provisions for dynamic reallocation—can all have significant downstream effects.Sometimes it is necessary for lower-level compilation details to leak into higher levels of design or architecture. For example, in the earlier days of chip design, endianness and byte packing inhibited interoperability. At this stage, it is hard to predict what may need to be exposed among quantum compilers and toolchains.Standard algorithms rely on the behavior of traditional software being 100 percent reproducible. For example, a classical computer will add the same two numbers repeatedly and give the same result every time. Unless we intentionally add randomness or introduce errors from improperly managed concurrent operations, classical computers function in completely deterministic ways.Many algorithms such as those in neural networks and machine learning are statistical systems that do not give clear yes-or-no answers. Rather, they express a percentage of confidence in their output. Giving a probabilistic response does not mean, however, that the system is nondeterministic. Given the same input and compute ability, the system would return the exact same confidence.Due to the physics of quantum mechanics, quantum computers are nondeterministic and unreliable. Even for the simplest computation, a quantum computer may sometimes return the wrong answer. Fault-tolerant quantum computing will require many approaches to masking, reducing, or correcting this quantum noise. Until we have fault-tolerant quantum computers, system architects must be prepared to manage the natural nondeterminism of these machines. Typically, they use a “voting” style algorithm that runs multiple times to show the right answer. Combining a statistical algorithm with an uncertain, nondeterministic system leads to its own challenges.However, quantum computers may make statistical algorithms much faster. When training, a machine learning algorithm uses a set of random starting conditions to give it options and avoid getting stuck on sub-optimal solutions. With a classical computer, the system chooses one starting state at a time. Quantum computers should, essentially, be able to compute many variations (starting conditions) of the model at the same time. This ability is a subtle, yet powerful feature of quantum computers. The algorithm would need to be redesigned to take advantage of the quantum properties, but it would obviate the need to wrap classical algorithms with approaches such as Monte-Carlo simulations. However, because those variations are generated internally within the quantum circuits, the approach is nondeterministic. We would forego determinism to run vastly more iterations in one computational pass.Lastly, quantum properties such as superposition and nondeterminism make circuit reproducibility difficult. Due to this lack of reproducibility, current techniques for unit and integration testing will need to be re-thought.Quantum technologies are likely to follow similar commercialization patterns as other disruptive technologies over the past decade. Due to the complexity, physical requirements, and cost of quantum hardware, we can expect large portions of the user base to access the quantum resources through an “as a service” business model: Quantum Compute as a Service. The offerings will come as a combination of quantum hardware with varying features in the quantum controller. We do not expect such an offering to differ from existing HPC models; the needs will be the same. Architects will need to be prepared to get the necessary data (partitioning, transmit, caching, etc.) to the remote quantum computer offering.Dependable metrics have always been crucial for evaluating computer performance, whether for gaming, sales, or conducting high-level scientific computations. The definition of these metrics has evolved over time, reflecting the progress in the field of computing.In the 1990s, clock cycles or megahertz served as the popular measure of computer speed. While this was more of a sales strategy than an accurate measure of performance, megahertz served as a reasonable proxy for speed when all computers ran the same OS and functioned in a similar manner. As we reached the limits of clock cycle speed, we sought performance improvements through other means: enhancing instructions per clock cycle, parallelizing instructions (SIMD), optimizing thread scheduling and utilization, and eventually transitioning to multi-core systems.The terms operations per second and floating-point operations per second (FLOPS) became commonplace in the computing community as more descriptive metrics. As of the writing of this post Oak Ridge National Laboratory (ORNL) houses the world’s fastest supercomputer, Frontier, with a speed of 1.194 exaflops.However, FLOPS measures computing speed and does not reflect the data storage capacity or the scale of computations a computer can handle. When evaluating a service offering from a large online provider, we look at the number of cores, CPU memory, and, in the case of GPUs, the model number and memory size. With the growing prominence of large language models (LLMs) we need GPUs with substantial memory to accommodate these extensive models. Factors such as FLOPS, the number of cores, memory interface, and bandwidth become secondary.Quantum computers today are often compared through the number of qubits and sold by compute time. However, these metrics are limiting, as they do not consider factors like qubit connectivity, error rates, gate speed, or qubit type, which can restrict the algorithmic capability of the QPU.While more nuanced metrics such as quantum volume (QV) and Circuit Layer Operations Per Second (CLOPS) allow for better comparisons between quantum computers, they may not be sufficient for architects to make comprehensive decisions.Future metrics for quantum computing might need to account for error rates, gate speed, qubit connectivity, qubit lifespan, and many other factors that influence the overall computational power and efficiency of a quantum computer. It is also plausible that we may end up renting computational capacity in terms of qubit-hours, but the specifics would depend on the technological developments and the evolving needs of the users.In essence, measuring capacity or workload on a quantum computer and how we will rent such computational power are open questions and exciting frontiers of research in this rapidly evolving field.We will be hosting the Workshop on Software Architecture Concerns for Quantum (WOSAQ) at IEEE Quantum Week on September 21, 2023. This workshop will explore some of the topics in this blog post more deeply, with a goal of growing the body of knowledge for quantum software engineers and developing a research roadmap for the future.Read "Achieving the Quantum Advantage in Software" by Jason Larkin and Daniel Justice.Read the conference paper "Evaluation of QAOA Based on the Approximation Ratio of Individual Samples" by Jason Larkin, Matías Jonsson, Daniel Justice, Gian Giacomo Guerreschi (Intel).
+Quantum Computing
+
+      Sign up to have the latest post sent to your inbox weekly.
+    
+        Each week, our researchers write about the latest in software engineering, cybersecurity and artificial intelligence. Sign up to get the latest post sent to your inbox the day it's published.
+      
+            Carnegie Mellon University
+            Software Engineering Institute
+4500 Fifth Avenue
+Pittsburgh, PA 15213-2612
+412-268-5800
+
+✕
+
+About
+
+Our Work
+
+Publications
+
+News and Events
+
+Education and Outreach
+
+Careers
+About
+
+Leadership
+Divisions
+Work with Us
+Collaboration with CMU
+History of Innovation at the SEI
+
+Our Work
+
+Agile
+Artificial Intelligence Engineering
+Cloud Computing
+Cyber Workforce Development
+Cybersecurity Center Development
+Cybersecurity Engineering
+DevSecOps
+All Topics
+All Projects
+
+Publications
+
+Annual Reviews
+Blog
+Digital LibraryPodcast Series
+Software and Tools
+Technical Papers
+Vulnerability Notes Database
+Webinar Series
+
+
+News and Events
+ NewsEvents
+SEI Bulletin
+
+Education and Outreach
+
+Courses
+Credentials
+Curricula
+License SEI Materials
+
+
+Careers
+
+Job Openings
+Diversity, Equity, and Inclusion
+Internship Opportunities
+
+SEIPublicationsBlog
+          
+            
+              
+                The Need for Quantum Software Architecture
+              
+            
+          
+        
+AMS
+
+APA
+
+Chicago
+
+IEEE
+
+BibTeX
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Report a Vulnerability to CERT/CCSubscribe to SEI BulletinRequest Permission to Use SEI Materials
+
+
+            Carnegie Mellon University
+            Software Engineering Institute
+4500 Fifth Avenue
+Pittsburgh, PA 15213-2612
+412-268-5800
+
+
+
+
+
+
+
+
+
+
+
+
+Contact Us
+
+
+
+Office Locations
+Additional Sites Directory
+Legal
+Privacy Notice
+CMU Ethics Hotline
+www.sei.cmu.edu
+
+Office LocationsAdditional Sites DirectoryLegalPrivacy NoticeCMU Ethics Hotlinewww.sei.cmu.edu
+2023
+
+Carnegie Mellon University
+
+
+
+
+
+
+search
+
+
+
+menu
+
+
+
+icon-carat-right
+
+
+
+cmu-wordmark
+
+
+
+
+
+
+
+
+✕
+
+
+
+
+
+About
+
+
+
+Leadership
+Divisions
+Work with Us
+Collaboration with CMU
+History of Innovation at the SEI
+
+
+
+
+
+
+Our Work
+
+
+
+Agile
+Artificial Intelligence Engineering
+Cyber Workforce Development
+Cybersecurity Center Development
+Cybersecurity Engineering
+DevSecOps
+Enterprise Risk and Resilience Management
+All Topics
+All Projects
+
+
+
+
+
+
+Publications
+
+
+
+Annual Reviews
+Blog
+Digital Library
+Podcast Series
+Software and Tools
+Technical Papers
+Vulnerability Notes Database
+Webinar Series
+
+
+
+
+
+
+News and Events
+
+
+
+News
+Events
+SEI Bulletin
+
+
+
+
+
+
+Education and Outreach
+
+
+
+Courses
+Credentials
+Curricula
+License SEI Materials
+
+
+
+
+
+
+Careers
+
+
+
+Job Openings
+Diversity, Equity and Inclusion
+Internship Opportunities
+Working at the SEI
+
+
+
+
+
+
+
+
+Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Software Engineering Institute
+
+
+
+
+
+
+
+
+
+
+About
+
+Leadership
+Divisions
+Work with Us
+Collaboration with CMU
+History of Innovation at the SEI
+
+
+Our Work
+
+Agile
+Artificial Intelligence Engineering
+Cloud Computing
+Cyber Workforce Development
+Cybersecurity Center Development
+Cybersecurity Engineering
+DevSecOps
+All Topics
+All Projects
+
+
+Publications
+
+Annual Reviews
+Blog
+Digital LibraryPodcast Series
+Software and Tools
+Technical Papers
+Vulnerability Notes Database
+Webinar Series
+
+
+
+News and Events
+ NewsEvents
+SEI Bulletin
+
+
+Education and Outreach
+
+Courses
+Credentials
+Curricula
+License SEI Materials
+
+
+
+Careers
+
+Job Openings
+Diversity, Equity, and Inclusion
+Internship Opportunities
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+SEI Blog
+
+
+
+
+
+
+
+SEI
+Publications
+Blog
+
+          
+            
+              
+                The Need for Quantum Software Architecture
+              
+            
+          
+        
+
+
+
+
+
+
+
+
+
+
+Cite This Post
+×
+
+
+
+
+
+
+
+
+
+
+
+AMS
+
+
+
+
+APA
+
+
+
+
+Chicago
+
+
+
+
+IEEE
+
+
+
+
+BibTeX
+
+
+
+
+
+
+AMS Citation
+Justice, D., and Mellinger, A., 2023: The Need for Quantum Software Architecture. Carnegie Mellon University, Software Engineering Institute's Insights (blog), Accessed September 7, 2023, https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+APA Citation
+Justice, D., & Mellinger, A. (2023, August 28). The Need for Quantum Software Architecture. Retrieved September 7, 2023, from https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+Chicago Citation
+Justice, Daniel, and Andrew Mellinger. "The Need for Quantum Software Architecture." Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, August 28, 2023. https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+IEEE Citation
+D. Justice, and A. Mellinger, "The Need for Quantum Software Architecture," Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, 28-Aug-2023 [Online]. Available: https://doi.org/10.58012/hqd8-zr24. [Accessed: 7-Sep-2023].
+Copy
+
+
+BibTeX Code
+@misc{justice_2023,author={Justice, Daniel and Mellinger, Andrew},title={The Need for Quantum Software Architecture},month={Aug},year={2023},howpublished={Carnegie Mellon University, Software Engineering Institute's Insights (blog)},url={https://doi.org/10.58012/hqd8-zr24},note={Accessed: 2023-Sep-7}}
+Copy
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  The Need for Quantum Software Architecture
+                
+
+
+
+
+
+
+
+
+Daniel Justice
+            
+            
+          
+            
+            
+            
+              and Andrew O. Mellinger
+
+
+
+
+
+        August 28, 2023
+      
+
+
+
+
+
+
+PUBLISHED IN
+
+Quantum Computing
+
+
+
+CITE
+https://doi.org/10.58012/hqd8-zr24
+
+Get Citation
+
+
+
+SHARE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+As the SEI embarks on a new project, Quantum Software Architecture, we’re setting out to answer an important question: If we want to adapt or build systems today that will one day use quantum hardware, how will that change our current approach to software architecture? In this blog post, we will discuss what a quantum computer is, the advantages quantum computing promises, and the concerns architects are likely to have when integrating quantum components into their systems.Extending Software Architecture to QuantumWhen software architecture coalesced as a distinct discipline in the 1990s, it brought structure—and with it, efficiency, quality, and long-term viability—to software projects that were previously characterized by scaling challenges, inconsistencies, poor integration, and ad hoc approaches to design and construction. Over the years, software architecture has been extended and applied to various domains to address specific challenges and requirements, including cloud computing, cybersecurity, and machine learning.The job of a modern software architect is to look at the overall system and choose what patterns, styles, and tactics best support not only the technical needs, but also the business needs, such as cost, staffing, and risks. They must do all this in a way that lets them evolve their product over (hopefully) years.Although quantum computers are becoming viable, it is unclear how they will manifest commercially. Many companies are trying to build the computing hardware, programming languages, and supporting tools; some service providers even offer access to their quantum computers. But how does an architect integrate or use these things with their system? Why would they? What benefits do these advances bring and with what costs?Are quantum computers just going to fit in like another database or compute node? Do they require special handling? How secure are they? Reliable? Performant? How do architects prepare their systems for using quantum computers?As organizations increasingly look to quantum computing for its potential to solve complex problems, applying software architecture principles to quantum computing can help manage complexity, achieve scalability and performance optimization, enable interoperability, support reliability and security, and promote collaboration and knowledge sharing. Software architecture provides a structured approach to designing quantum software systems that can effectively harness the power of quantum technologies.In our research project, Quantum Software Architecture, we are working to understand, document, and communicate the unique differences and challenges associated with incorporating quantum technologies into existing systems. We aim to identify and document useful, and potentially unique, abstractions and strategies for integrating quantum technologies in an existing system, with the goal of promoting successful adoption of these components.Quantum PromiseLike early-stage blockchain or AI, quantum technology is caught in a hype cycle of inflated expectations, followed by skepticism; it will be some time before quantum moves into genuine progress. For that potential to be realized, it's crucial to discern between the genuine promise of quantum and the buzz surrounding it. Quantum technologies promise us sensors, computers, and communication with capabilities that far exceed our current technologies. With the expected increases in compute power, applications previously constrained by classical compute limitations will become practical.The flagship example of gains promised by quantum computers is the breaking of RSA-2048, an encryption scheme widely used today. Cracking the code requires factoring a 2,048-bit number, which would take current computers on the order of trillions of years to compute. Quantum computers are expected to be able to perform the same computation within hours or perhaps seconds. This potential leap in efficiency still demonstrates the impressive powers of quantum technologies.The quantum promise is very narrow in scope, and this narrowness is one of the reasons why quantum computers will not be replacing classical computers but will instead be used as accelerating co-processors like graphics processing units (GPUs) or video cards. There is no advantage in performing basic computations, such as addition, multiplication, and division, on a quantum computer. Instead, quantum can offer improvements for algorithms requiring optimizations, searches, Fourier transforms, and prime factorization. Applications that can benefit from these algorithms are portfolio optimizations, machine learning, drug discovery, and logistics optimization. Applications in encryption breaking and chemistry and material science are exceptionally promising.While there are some possibilities for quantum computers to speed up specific, existing large computations, their most profound promise lies in leveraging their ability to compute all variations of the solution at precisely the same time to unlock new frontiers of computation and tackle currently incalculable problems.
+
+
+
+
+
+
+                            Figure 1: Quantum Speedup
+                            
+                              
+                                Reprinted with permission from Disentangling Hype from Practicality: On Realistically Achieving Quantum Advantage by Torsten Hoefler, Thomas Häner, and Matthias Troyer.
+
+
+
+What Is a Quantum Computer, and How Does It Work?In understanding quantum computers and how they work with classical computers, it is helpful to consider the GPU. The GPU started off as a video card. Users did not directly interact with the video card, but instead with the CPU that used it. The same is true for quantum technologies. The quantum processing unit (QPU) will not be directly accessible by a user and requires a controller (often called a quantum controller). It is this combination of quantum controller and QPU together that we refer to as a quantum computer or QC.Systems architects should expect to see quantum computers presented much like GPU instances or offerings are provided today. GPU instances include a compute or controller node with some number of CPUs, some memory, and some set of GPU resources. Similarly, a QC will have a controller with some number of classical CPUs, memory, and an attached QPU.Where a QPU differs from a GPU is in how it accelerates a computation. GPUs use specialized hardware architecture designed to efficiently run the same small mathematical processes over and over across many cores in parallel. QPUs accelerate computation by giving access to a new class of algorithms (bounded-error quantum polynomial time or BQP) through the use of superposition, entanglement, and interference. This class of algorithms, while few in number, offers quadratic and exponential speedups to their classical counterparts.What We’re Learning: Architecture Considerations for Quantum ComputersAs quantum compute technology advances and becomes more complex, planning for its integration becomes increasingly pressing for the Department of Defense. In our work exploring software architectures for systems with quantum components, our goal is to provide a foundation for developing effective software architectures that optimize quantum technology capabilities while managing its demands. We aim to understand, document, and communicate the unique differences and challenges associated with incorporating quantum technologies into existing systems. We will identify and document useful, potentially unique, abstractions and strategies for integrating quantum technologies in an existing system, with the goal of promoting successful adoption of these components. Here is what we are learning along the way.Transient Data on Quantum ComputersQuantum computers do not use bits or bytes, such as in classical computers, but instead use quantum bits or qubits. Qubits do not store single bits of data in a state of 0 or 1; instead they assume a state of superposition, an intermediate stage between 0 and 1—akin to the concept embodied in Schrödinger's Cat. The superpositioned state of a qubit, much like the cat's fate inside the box, remains inaccessible to us. Upon reading the qubit, the state collapses into a classical 0 or 1, resulting in the loss of all information within the quantum state.Compounding the problem, the lifespan of data on qubits is exceptionally brief. As of February 2022, lifespans of 10-100 milliseconds are common, with the longest recorded lifespan reaching five seconds. Calculations must be performed swiftly within this time frame, limiting the types of computation that can be done, and the data must be reloaded after each computation.As such, loading data onto a QPU is an essential part of the process and is required for every computation. In the worst case, data loading requires an exponential amount of time, effectively negating any potential quantum speedup. In the future, quantum sensors will make it possible to feed data directly into the QC.Discovery and utilization of methods to efficiently load useful data onto a QPU are paramount for finding quantum advantage over purely classical systems.Quantum Compilation StackA fundamental construct of quantum computing is the quantum circuit. Executing a quantum algorithm often requires the creation of an appropriate circuit, a process like the classical approach where a logic-gate-filled circuit is devised for each computation. This process is akin to repeatedly reconfiguring a field-programmable gate array (FPGA) or programming an analog computer for each individual use case.Quantum circuits are then compiled down into machine code specifically tailored for a target QPU. This translation from high-level algorithm design to low-level machine code can be seen in frameworks such as IBM’s where OpenQASM is compiled down to Qiskit-Pulse.The choices made during the generation and optimization of these quantum circuits—such as the selection of the quantum programming language, error correction mechanisms, or the provisions for dynamic reallocation—can all have significant downstream effects.Sometimes it is necessary for lower-level compilation details to leak into higher levels of design or architecture. For example, in the earlier days of chip design, endianness and byte packing inhibited interoperability. At this stage, it is hard to predict what may need to be exposed among quantum compilers and toolchains.Predictability, Reproducibility, and Non-DeterminismStandard algorithms rely on the behavior of traditional software being 100 percent reproducible. For example, a classical computer will add the same two numbers repeatedly and give the same result every time. Unless we intentionally add randomness or introduce errors from improperly managed concurrent operations, classical computers function in completely deterministic ways.Many algorithms such as those in neural networks and machine learning are statistical systems that do not give clear yes-or-no answers. Rather, they express a percentage of confidence in their output. Giving a probabilistic response does not mean, however, that the system is nondeterministic. Given the same input and compute ability, the system would return the exact same confidence.Due to the physics of quantum mechanics, quantum computers are nondeterministic and unreliable. Even for the simplest computation, a quantum computer may sometimes return the wrong answer. Fault-tolerant quantum computing will require many approaches to masking, reducing, or correcting this quantum noise. Until we have fault-tolerant quantum computers, system architects must be prepared to manage the natural nondeterminism of these machines. Typically, they use a “voting” style algorithm that runs multiple times to show the right answer. Combining a statistical algorithm with an uncertain, nondeterministic system leads to its own challenges.However, quantum computers may make statistical algorithms much faster. When training, a machine learning algorithm uses a set of random starting conditions to give it options and avoid getting stuck on sub-optimal solutions. With a classical computer, the system chooses one starting state at a time. Quantum computers should, essentially, be able to compute many variations (starting conditions) of the model at the same time. This ability is a subtle, yet powerful feature of quantum computers. The algorithm would need to be redesigned to take advantage of the quantum properties, but it would obviate the need to wrap classical algorithms with approaches such as Monte-Carlo simulations. However, because those variations are generated internally within the quantum circuits, the approach is nondeterministic. We would forego determinism to run vastly more iterations in one computational pass.Lastly, quantum properties such as superposition and nondeterminism make circuit reproducibility difficult. Due to this lack of reproducibility, current techniques for unit and integration testing will need to be re-thought.Quantum DeploymentQuantum technologies are likely to follow similar commercialization patterns as other disruptive technologies over the past decade. Due to the complexity, physical requirements, and cost of quantum hardware, we can expect large portions of the user base to access the quantum resources through an “as a service” business model: Quantum Compute as a Service. The offerings will come as a combination of quantum hardware with varying features in the quantum controller. We do not expect such an offering to differ from existing HPC models; the needs will be the same. Architects will need to be prepared to get the necessary data (partitioning, transmit, caching, etc.) to the remote quantum computer offering.Quantum MetricsDependable metrics have always been crucial for evaluating computer performance, whether for gaming, sales, or conducting high-level scientific computations. The definition of these metrics has evolved over time, reflecting the progress in the field of computing.In the 1990s, clock cycles or megahertz served as the popular measure of computer speed. While this was more of a sales strategy than an accurate measure of performance, megahertz served as a reasonable proxy for speed when all computers ran the same OS and functioned in a similar manner. As we reached the limits of clock cycle speed, we sought performance improvements through other means: enhancing instructions per clock cycle, parallelizing instructions (SIMD), optimizing thread scheduling and utilization, and eventually transitioning to multi-core systems.The terms operations per second and floating-point operations per second (FLOPS) became commonplace in the computing community as more descriptive metrics. As of the writing of this post Oak Ridge National Laboratory (ORNL) houses the world’s fastest supercomputer, Frontier, with a speed of 1.194 exaflops.However, FLOPS measures computing speed and does not reflect the data storage capacity or the scale of computations a computer can handle. When evaluating a service offering from a large online provider, we look at the number of cores, CPU memory, and, in the case of GPUs, the model number and memory size. With the growing prominence of large language models (LLMs) we need GPUs with substantial memory to accommodate these extensive models. Factors such as FLOPS, the number of cores, memory interface, and bandwidth become secondary.Quantum computers today are often compared through the number of qubits and sold by compute time. However, these metrics are limiting, as they do not consider factors like qubit connectivity, error rates, gate speed, or qubit type, which can restrict the algorithmic capability of the QPU.While more nuanced metrics such as quantum volume (QV) and Circuit Layer Operations Per Second (CLOPS) allow for better comparisons between quantum computers, they may not be sufficient for architects to make comprehensive decisions.Future metrics for quantum computing might need to account for error rates, gate speed, qubit connectivity, qubit lifespan, and many other factors that influence the overall computational power and efficiency of a quantum computer. It is also plausible that we may end up renting computational capacity in terms of qubit-hours, but the specifics would depend on the technological developments and the evolving needs of the users.In essence, measuring capacity or workload on a quantum computer and how we will rent such computational power are open questions and exciting frontiers of research in this rapidly evolving field.Looking AheadWe will be hosting the Workshop on Software Architecture Concerns for Quantum (WOSAQ) at IEEE Quantum Week on September 21, 2023. This workshop will explore some of the topics in this blog post more deeply, with a goal of growing the body of knowledge for quantum software engineers and developing a research roadmap for the future.
+
+
+
+
+Additional Resources
+
+
+Read "Achieving the Quantum Advantage in Software" by Jason Larkin and Daniel Justice.Read the conference paper "Evaluation of QAOA Based on the Approximation Ratio of Individual Samples" by Jason Larkin, Matías Jonsson, Daniel Justice, Gian Giacomo Guerreschi (Intel).
+
+
+
+
+
+Written By
+
+
+
+
+
+
+
+Daniel Justice
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+
+
+
+
+
+Andrew O. Mellinger
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+More By The Authors
+
+
+
+11 Leading Practices When Implementing a Container Strategy
+
+
+
+
+
+
+November 8, 2021 • By
+          
+            
+               Andrew O. Mellinger,
+            
+          
+            
+               William Nichols,
+            
+          
+            
+               Jay Palat
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+AI Engineering: 11 Foundational Practices for Decision Makers
+
+
+
+
+
+
+December 9, 2019 • By
+          
+            
+               Ipek Ozkaya,
+            
+          
+            
+               Angela Horneman,
+            
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+
+A Platform for Dynamic Defense Technologies
+
+
+
+
+
+
+April 18, 2016 • By
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+More In Quantum Computing
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+
+
+
+PUBLISHED IN
+
+Quantum Computing
+
+
+
+CITE
+https://doi.org/10.58012/hqd8-zr24
+
+Get Citation
+
+
+
+SHARE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Get updates on our latest work.
+
+      Sign up to have the latest post sent to your inbox weekly.
+    
+Subscribe
+Get our RSS feed
+
+
+
+More In Quantum Computing
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+
+
+
+
+
+
+Get updates on our latest work.
+
+        Each week, our researchers write about the latest in software engineering, cybersecurity and artificial intelligence. Sign up to get the latest post sent to your inbox the day it's published.
+      
+Subscribe
+Get our RSS feed
+
+
+
+
+
+
+
+
+About
+
+
+
+Leadership
+Divisions
+Work with Us
+Collaboration with CMU
+History of Innovation at the SEI
+
+
+
+
+
+Our Work
+
+
+
+Agile
+Artificial Intelligence Engineering
+Cyber Workforce Development
+Cybersecurity Center Development
+Cybersecurity Engineering
+DevSecOps
+Enterprise Risk and Resilience Management
+All Topics
+All Projects
+
+
+
+
+
+Publications
+
+
+
+Annual Reviews
+Blog
+Digital Library
+Podcast Series
+Software and Tools
+Technical Papers
+Vulnerability Notes Database
+Webinar Series
+
+
+
+
+
+News and Events
+
+
+
+News
+Events
+SEI Bulletin
+
+
+
+
+
+Education and Outreach
+
+
+
+Courses
+Credentials
+Curricula
+License SEI Materials
+
+
+
+
+
+Careers
+
+
+
+Job Openings
+Diversity, Equity and Inclusion
+Internship Opportunities
+Working at the SEI
+
+
+
+
+Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Software Engineering Institute
+
+
+
+
+
+
+
+
+
+
+About
+
+Leadership
+Divisions
+Work with Us
+Collaboration with CMU
+History of Innovation at the SEI
+
+
+Our Work
+
+Agile
+Artificial Intelligence Engineering
+Cloud Computing
+Cyber Workforce Development
+Cybersecurity Center Development
+Cybersecurity Engineering
+DevSecOps
+All Topics
+All Projects
+
+
+Publications
+
+Annual Reviews
+Blog
+Digital LibraryPodcast Series
+Software and Tools
+Technical Papers
+Vulnerability Notes Database
+Webinar Series
+
+
+
+News and Events
+ NewsEvents
+SEI Bulletin
+
+
+Education and Outreach
+
+Courses
+Credentials
+Curricula
+License SEI Materials
+
+
+
+Careers
+
+Job Openings
+Diversity, Equity, and Inclusion
+Internship Opportunities
+
+
+
+
+
+
+
+
+
+
+
+
+Software Engineering Institute
+
+
+
+
+
+
+
+
+Software Engineering Institute
+
+
+
+
+
+
+Software Engineering Institute
+
+
+
+
+
+
+
+About
+
+Leadership
+Divisions
+Work with Us
+Collaboration with CMU
+History of Innovation at the SEI
+
+
+Our Work
+
+Agile
+Artificial Intelligence Engineering
+Cloud Computing
+Cyber Workforce Development
+Cybersecurity Center Development
+Cybersecurity Engineering
+DevSecOps
+All Topics
+All Projects
+
+
+Publications
+
+Annual Reviews
+Blog
+Digital LibraryPodcast Series
+Software and Tools
+Technical Papers
+Vulnerability Notes Database
+Webinar Series
+
+
+
+News and Events
+ NewsEvents
+SEI Bulletin
+
+
+Education and Outreach
+
+Courses
+Credentials
+Curricula
+License SEI Materials
+
+
+
+Careers
+
+Job Openings
+Diversity, Equity, and Inclusion
+Internship Opportunities
+
+
+
+
+
+
+
+
+
+
+About
+
+Leadership
+Divisions
+Work with Us
+Collaboration with CMU
+History of Innovation at the SEI
+
+
+Our Work
+
+Agile
+Artificial Intelligence Engineering
+Cloud Computing
+Cyber Workforce Development
+Cybersecurity Center Development
+Cybersecurity Engineering
+DevSecOps
+All Topics
+All Projects
+
+
+Publications
+
+Annual Reviews
+Blog
+Digital LibraryPodcast Series
+Software and Tools
+Technical Papers
+Vulnerability Notes Database
+Webinar Series
+
+
+
+News and Events
+ NewsEvents
+SEI Bulletin
+
+
+Education and Outreach
+
+Courses
+Credentials
+Curricula
+License SEI Materials
+
+
+
+Careers
+
+Job Openings
+Diversity, Equity, and Inclusion
+Internship Opportunities
+
+
+
+
+
+
+
+About
+
+Leadership
+Divisions
+Work with Us
+Collaboration with CMU
+History of Innovation at the SEI
+
+
+Our Work
+
+Agile
+Artificial Intelligence Engineering
+Cloud Computing
+Cyber Workforce Development
+Cybersecurity Center Development
+Cybersecurity Engineering
+DevSecOps
+All Topics
+All Projects
+
+
+Publications
+
+Annual Reviews
+Blog
+Digital LibraryPodcast Series
+Software and Tools
+Technical Papers
+Vulnerability Notes Database
+Webinar Series
+
+
+
+News and Events
+ NewsEvents
+SEI Bulletin
+
+
+Education and Outreach
+
+Courses
+Credentials
+Curricula
+License SEI Materials
+
+
+
+Careers
+
+Job Openings
+Diversity, Equity, and Inclusion
+Internship Opportunities
+
+
+
+
+Leadership
+Divisions
+Work with Us
+Collaboration with CMU
+History of Innovation at the SEI
+
+Agile
+Artificial Intelligence Engineering
+Cloud Computing
+Cyber Workforce Development
+Cybersecurity Center Development
+Cybersecurity Engineering
+DevSecOps
+All Topics
+All Projects
+
+Annual Reviews
+Blog
+Digital LibraryPodcast Series
+Software and Tools
+Technical Papers
+Vulnerability Notes Database
+Webinar Series
+ NewsEvents
+SEI Bulletin
+
+Courses
+Credentials
+Curricula
+License SEI Materials
+
+Job Openings
+Diversity, Equity, and Inclusion
+Internship Opportunities
+
+
+
+
+
+
+SEI Blog
+
+
+
+
+
+
+
+SEI
+Publications
+Blog
+
+          
+            
+              
+                The Need for Quantum Software Architecture
+              
+            
+          
+        
+
+
+
+
+
+
+
+
+
+
+Cite This Post
+×
+
+
+
+
+
+
+
+
+
+
+
+AMS
+
+
+
+
+APA
+
+
+
+
+Chicago
+
+
+
+
+IEEE
+
+
+
+
+BibTeX
+
+
+
+
+
+
+AMS Citation
+Justice, D., and Mellinger, A., 2023: The Need for Quantum Software Architecture. Carnegie Mellon University, Software Engineering Institute's Insights (blog), Accessed September 7, 2023, https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+APA Citation
+Justice, D., & Mellinger, A. (2023, August 28). The Need for Quantum Software Architecture. Retrieved September 7, 2023, from https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+Chicago Citation
+Justice, Daniel, and Andrew Mellinger. "The Need for Quantum Software Architecture." Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, August 28, 2023. https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+IEEE Citation
+D. Justice, and A. Mellinger, "The Need for Quantum Software Architecture," Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, 28-Aug-2023 [Online]. Available: https://doi.org/10.58012/hqd8-zr24. [Accessed: 7-Sep-2023].
+Copy
+
+
+BibTeX Code
+@misc{justice_2023,author={Justice, Daniel and Mellinger, Andrew},title={The Need for Quantum Software Architecture},month={Aug},year={2023},howpublished={Carnegie Mellon University, Software Engineering Institute's Insights (blog)},url={https://doi.org/10.58012/hqd8-zr24},note={Accessed: 2023-Sep-7}}
+Copy
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  The Need for Quantum Software Architecture
+                
+
+
+
+
+
+
+
+
+Daniel Justice
+            
+            
+          
+            
+            
+            
+              and Andrew O. Mellinger
+
+
+
+
+
+        August 28, 2023
+      
+
+
+
+
+
+
+PUBLISHED IN
+
+Quantum Computing
+
+
+
+CITE
+https://doi.org/10.58012/hqd8-zr24
+
+Get Citation
+
+
+
+SHARE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+As the SEI embarks on a new project, Quantum Software Architecture, we’re setting out to answer an important question: If we want to adapt or build systems today that will one day use quantum hardware, how will that change our current approach to software architecture? In this blog post, we will discuss what a quantum computer is, the advantages quantum computing promises, and the concerns architects are likely to have when integrating quantum components into their systems.Extending Software Architecture to QuantumWhen software architecture coalesced as a distinct discipline in the 1990s, it brought structure—and with it, efficiency, quality, and long-term viability—to software projects that were previously characterized by scaling challenges, inconsistencies, poor integration, and ad hoc approaches to design and construction. Over the years, software architecture has been extended and applied to various domains to address specific challenges and requirements, including cloud computing, cybersecurity, and machine learning.The job of a modern software architect is to look at the overall system and choose what patterns, styles, and tactics best support not only the technical needs, but also the business needs, such as cost, staffing, and risks. They must do all this in a way that lets them evolve their product over (hopefully) years.Although quantum computers are becoming viable, it is unclear how they will manifest commercially. Many companies are trying to build the computing hardware, programming languages, and supporting tools; some service providers even offer access to their quantum computers. But how does an architect integrate or use these things with their system? Why would they? What benefits do these advances bring and with what costs?Are quantum computers just going to fit in like another database or compute node? Do they require special handling? How secure are they? Reliable? Performant? How do architects prepare their systems for using quantum computers?As organizations increasingly look to quantum computing for its potential to solve complex problems, applying software architecture principles to quantum computing can help manage complexity, achieve scalability and performance optimization, enable interoperability, support reliability and security, and promote collaboration and knowledge sharing. Software architecture provides a structured approach to designing quantum software systems that can effectively harness the power of quantum technologies.In our research project, Quantum Software Architecture, we are working to understand, document, and communicate the unique differences and challenges associated with incorporating quantum technologies into existing systems. We aim to identify and document useful, and potentially unique, abstractions and strategies for integrating quantum technologies in an existing system, with the goal of promoting successful adoption of these components.Quantum PromiseLike early-stage blockchain or AI, quantum technology is caught in a hype cycle of inflated expectations, followed by skepticism; it will be some time before quantum moves into genuine progress. For that potential to be realized, it's crucial to discern between the genuine promise of quantum and the buzz surrounding it. Quantum technologies promise us sensors, computers, and communication with capabilities that far exceed our current technologies. With the expected increases in compute power, applications previously constrained by classical compute limitations will become practical.The flagship example of gains promised by quantum computers is the breaking of RSA-2048, an encryption scheme widely used today. Cracking the code requires factoring a 2,048-bit number, which would take current computers on the order of trillions of years to compute. Quantum computers are expected to be able to perform the same computation within hours or perhaps seconds. This potential leap in efficiency still demonstrates the impressive powers of quantum technologies.The quantum promise is very narrow in scope, and this narrowness is one of the reasons why quantum computers will not be replacing classical computers but will instead be used as accelerating co-processors like graphics processing units (GPUs) or video cards. There is no advantage in performing basic computations, such as addition, multiplication, and division, on a quantum computer. Instead, quantum can offer improvements for algorithms requiring optimizations, searches, Fourier transforms, and prime factorization. Applications that can benefit from these algorithms are portfolio optimizations, machine learning, drug discovery, and logistics optimization. Applications in encryption breaking and chemistry and material science are exceptionally promising.While there are some possibilities for quantum computers to speed up specific, existing large computations, their most profound promise lies in leveraging their ability to compute all variations of the solution at precisely the same time to unlock new frontiers of computation and tackle currently incalculable problems.
+
+
+
+
+
+
+                            Figure 1: Quantum Speedup
+                            
+                              
+                                Reprinted with permission from Disentangling Hype from Practicality: On Realistically Achieving Quantum Advantage by Torsten Hoefler, Thomas Häner, and Matthias Troyer.
+
+
+
+What Is a Quantum Computer, and How Does It Work?In understanding quantum computers and how they work with classical computers, it is helpful to consider the GPU. The GPU started off as a video card. Users did not directly interact with the video card, but instead with the CPU that used it. The same is true for quantum technologies. The quantum processing unit (QPU) will not be directly accessible by a user and requires a controller (often called a quantum controller). It is this combination of quantum controller and QPU together that we refer to as a quantum computer or QC.Systems architects should expect to see quantum computers presented much like GPU instances or offerings are provided today. GPU instances include a compute or controller node with some number of CPUs, some memory, and some set of GPU resources. Similarly, a QC will have a controller with some number of classical CPUs, memory, and an attached QPU.Where a QPU differs from a GPU is in how it accelerates a computation. GPUs use specialized hardware architecture designed to efficiently run the same small mathematical processes over and over across many cores in parallel. QPUs accelerate computation by giving access to a new class of algorithms (bounded-error quantum polynomial time or BQP) through the use of superposition, entanglement, and interference. This class of algorithms, while few in number, offers quadratic and exponential speedups to their classical counterparts.What We’re Learning: Architecture Considerations for Quantum ComputersAs quantum compute technology advances and becomes more complex, planning for its integration becomes increasingly pressing for the Department of Defense. In our work exploring software architectures for systems with quantum components, our goal is to provide a foundation for developing effective software architectures that optimize quantum technology capabilities while managing its demands. We aim to understand, document, and communicate the unique differences and challenges associated with incorporating quantum technologies into existing systems. We will identify and document useful, potentially unique, abstractions and strategies for integrating quantum technologies in an existing system, with the goal of promoting successful adoption of these components. Here is what we are learning along the way.Transient Data on Quantum ComputersQuantum computers do not use bits or bytes, such as in classical computers, but instead use quantum bits or qubits. Qubits do not store single bits of data in a state of 0 or 1; instead they assume a state of superposition, an intermediate stage between 0 and 1—akin to the concept embodied in Schrödinger's Cat. The superpositioned state of a qubit, much like the cat's fate inside the box, remains inaccessible to us. Upon reading the qubit, the state collapses into a classical 0 or 1, resulting in the loss of all information within the quantum state.Compounding the problem, the lifespan of data on qubits is exceptionally brief. As of February 2022, lifespans of 10-100 milliseconds are common, with the longest recorded lifespan reaching five seconds. Calculations must be performed swiftly within this time frame, limiting the types of computation that can be done, and the data must be reloaded after each computation.As such, loading data onto a QPU is an essential part of the process and is required for every computation. In the worst case, data loading requires an exponential amount of time, effectively negating any potential quantum speedup. In the future, quantum sensors will make it possible to feed data directly into the QC.Discovery and utilization of methods to efficiently load useful data onto a QPU are paramount for finding quantum advantage over purely classical systems.Quantum Compilation StackA fundamental construct of quantum computing is the quantum circuit. Executing a quantum algorithm often requires the creation of an appropriate circuit, a process like the classical approach where a logic-gate-filled circuit is devised for each computation. This process is akin to repeatedly reconfiguring a field-programmable gate array (FPGA) or programming an analog computer for each individual use case.Quantum circuits are then compiled down into machine code specifically tailored for a target QPU. This translation from high-level algorithm design to low-level machine code can be seen in frameworks such as IBM’s where OpenQASM is compiled down to Qiskit-Pulse.The choices made during the generation and optimization of these quantum circuits—such as the selection of the quantum programming language, error correction mechanisms, or the provisions for dynamic reallocation—can all have significant downstream effects.Sometimes it is necessary for lower-level compilation details to leak into higher levels of design or architecture. For example, in the earlier days of chip design, endianness and byte packing inhibited interoperability. At this stage, it is hard to predict what may need to be exposed among quantum compilers and toolchains.Predictability, Reproducibility, and Non-DeterminismStandard algorithms rely on the behavior of traditional software being 100 percent reproducible. For example, a classical computer will add the same two numbers repeatedly and give the same result every time. Unless we intentionally add randomness or introduce errors from improperly managed concurrent operations, classical computers function in completely deterministic ways.Many algorithms such as those in neural networks and machine learning are statistical systems that do not give clear yes-or-no answers. Rather, they express a percentage of confidence in their output. Giving a probabilistic response does not mean, however, that the system is nondeterministic. Given the same input and compute ability, the system would return the exact same confidence.Due to the physics of quantum mechanics, quantum computers are nondeterministic and unreliable. Even for the simplest computation, a quantum computer may sometimes return the wrong answer. Fault-tolerant quantum computing will require many approaches to masking, reducing, or correcting this quantum noise. Until we have fault-tolerant quantum computers, system architects must be prepared to manage the natural nondeterminism of these machines. Typically, they use a “voting” style algorithm that runs multiple times to show the right answer. Combining a statistical algorithm with an uncertain, nondeterministic system leads to its own challenges.However, quantum computers may make statistical algorithms much faster. When training, a machine learning algorithm uses a set of random starting conditions to give it options and avoid getting stuck on sub-optimal solutions. With a classical computer, the system chooses one starting state at a time. Quantum computers should, essentially, be able to compute many variations (starting conditions) of the model at the same time. This ability is a subtle, yet powerful feature of quantum computers. The algorithm would need to be redesigned to take advantage of the quantum properties, but it would obviate the need to wrap classical algorithms with approaches such as Monte-Carlo simulations. However, because those variations are generated internally within the quantum circuits, the approach is nondeterministic. We would forego determinism to run vastly more iterations in one computational pass.Lastly, quantum properties such as superposition and nondeterminism make circuit reproducibility difficult. Due to this lack of reproducibility, current techniques for unit and integration testing will need to be re-thought.Quantum DeploymentQuantum technologies are likely to follow similar commercialization patterns as other disruptive technologies over the past decade. Due to the complexity, physical requirements, and cost of quantum hardware, we can expect large portions of the user base to access the quantum resources through an “as a service” business model: Quantum Compute as a Service. The offerings will come as a combination of quantum hardware with varying features in the quantum controller. We do not expect such an offering to differ from existing HPC models; the needs will be the same. Architects will need to be prepared to get the necessary data (partitioning, transmit, caching, etc.) to the remote quantum computer offering.Quantum MetricsDependable metrics have always been crucial for evaluating computer performance, whether for gaming, sales, or conducting high-level scientific computations. The definition of these metrics has evolved over time, reflecting the progress in the field of computing.In the 1990s, clock cycles or megahertz served as the popular measure of computer speed. While this was more of a sales strategy than an accurate measure of performance, megahertz served as a reasonable proxy for speed when all computers ran the same OS and functioned in a similar manner. As we reached the limits of clock cycle speed, we sought performance improvements through other means: enhancing instructions per clock cycle, parallelizing instructions (SIMD), optimizing thread scheduling and utilization, and eventually transitioning to multi-core systems.The terms operations per second and floating-point operations per second (FLOPS) became commonplace in the computing community as more descriptive metrics. As of the writing of this post Oak Ridge National Laboratory (ORNL) houses the world’s fastest supercomputer, Frontier, with a speed of 1.194 exaflops.However, FLOPS measures computing speed and does not reflect the data storage capacity or the scale of computations a computer can handle. When evaluating a service offering from a large online provider, we look at the number of cores, CPU memory, and, in the case of GPUs, the model number and memory size. With the growing prominence of large language models (LLMs) we need GPUs with substantial memory to accommodate these extensive models. Factors such as FLOPS, the number of cores, memory interface, and bandwidth become secondary.Quantum computers today are often compared through the number of qubits and sold by compute time. However, these metrics are limiting, as they do not consider factors like qubit connectivity, error rates, gate speed, or qubit type, which can restrict the algorithmic capability of the QPU.While more nuanced metrics such as quantum volume (QV) and Circuit Layer Operations Per Second (CLOPS) allow for better comparisons between quantum computers, they may not be sufficient for architects to make comprehensive decisions.Future metrics for quantum computing might need to account for error rates, gate speed, qubit connectivity, qubit lifespan, and many other factors that influence the overall computational power and efficiency of a quantum computer. It is also plausible that we may end up renting computational capacity in terms of qubit-hours, but the specifics would depend on the technological developments and the evolving needs of the users.In essence, measuring capacity or workload on a quantum computer and how we will rent such computational power are open questions and exciting frontiers of research in this rapidly evolving field.Looking AheadWe will be hosting the Workshop on Software Architecture Concerns for Quantum (WOSAQ) at IEEE Quantum Week on September 21, 2023. This workshop will explore some of the topics in this blog post more deeply, with a goal of growing the body of knowledge for quantum software engineers and developing a research roadmap for the future.
+
+
+
+
+Additional Resources
+
+
+Read "Achieving the Quantum Advantage in Software" by Jason Larkin and Daniel Justice.Read the conference paper "Evaluation of QAOA Based on the Approximation Ratio of Individual Samples" by Jason Larkin, Matías Jonsson, Daniel Justice, Gian Giacomo Guerreschi (Intel).
+
+
+
+
+
+Written By
+
+
+
+
+
+
+
+Daniel Justice
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+
+
+
+
+
+Andrew O. Mellinger
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+More By The Authors
+
+
+
+11 Leading Practices When Implementing a Container Strategy
+
+
+
+
+
+
+November 8, 2021 • By
+          
+            
+               Andrew O. Mellinger,
+            
+          
+            
+               William Nichols,
+            
+          
+            
+               Jay Palat
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+AI Engineering: 11 Foundational Practices for Decision Makers
+
+
+
+
+
+
+December 9, 2019 • By
+          
+            
+               Ipek Ozkaya,
+            
+          
+            
+               Angela Horneman,
+            
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+
+A Platform for Dynamic Defense Technologies
+
+
+
+
+
+
+April 18, 2016 • By
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+More In Quantum Computing
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+
+
+
+PUBLISHED IN
+
+Quantum Computing
+
+
+
+CITE
+https://doi.org/10.58012/hqd8-zr24
+
+Get Citation
+
+
+
+SHARE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Get updates on our latest work.
+
+      Sign up to have the latest post sent to your inbox weekly.
+    
+Subscribe
+Get our RSS feed
+
+
+
+More In Quantum Computing
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+
+
+
+
+
+SEI Blog
+
+
+
+
+
+
+SEI Blog
+
+
+
+SEI Blog
+
+
+
+SEI
+Publications
+Blog
+
+          
+            
+              
+                The Need for Quantum Software Architecture
+              
+            
+          
+        
+
+
+
+
+
+
+
+
+
+Cite This Post
+×
+
+
+
+
+
+
+
+
+
+
+
+AMS
+
+
+
+
+APA
+
+
+
+
+Chicago
+
+
+
+
+IEEE
+
+
+
+
+BibTeX
+
+
+
+
+
+
+AMS Citation
+Justice, D., and Mellinger, A., 2023: The Need for Quantum Software Architecture. Carnegie Mellon University, Software Engineering Institute's Insights (blog), Accessed September 7, 2023, https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+APA Citation
+Justice, D., & Mellinger, A. (2023, August 28). The Need for Quantum Software Architecture. Retrieved September 7, 2023, from https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+Chicago Citation
+Justice, Daniel, and Andrew Mellinger. "The Need for Quantum Software Architecture." Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, August 28, 2023. https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+IEEE Citation
+D. Justice, and A. Mellinger, "The Need for Quantum Software Architecture," Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, 28-Aug-2023 [Online]. Available: https://doi.org/10.58012/hqd8-zr24. [Accessed: 7-Sep-2023].
+Copy
+
+
+BibTeX Code
+@misc{justice_2023,author={Justice, Daniel and Mellinger, Andrew},title={The Need for Quantum Software Architecture},month={Aug},year={2023},howpublished={Carnegie Mellon University, Software Engineering Institute's Insights (blog)},url={https://doi.org/10.58012/hqd8-zr24},note={Accessed: 2023-Sep-7}}
+Copy
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  The Need for Quantum Software Architecture
+                
+
+
+
+
+
+
+
+
+Daniel Justice
+            
+            
+          
+            
+            
+            
+              and Andrew O. Mellinger
+
+
+
+
+
+        August 28, 2023
+      
+
+
+
+
+
+
+PUBLISHED IN
+
+Quantum Computing
+
+
+
+CITE
+https://doi.org/10.58012/hqd8-zr24
+
+Get Citation
+
+
+
+SHARE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+As the SEI embarks on a new project, Quantum Software Architecture, we’re setting out to answer an important question: If we want to adapt or build systems today that will one day use quantum hardware, how will that change our current approach to software architecture? In this blog post, we will discuss what a quantum computer is, the advantages quantum computing promises, and the concerns architects are likely to have when integrating quantum components into their systems.Extending Software Architecture to QuantumWhen software architecture coalesced as a distinct discipline in the 1990s, it brought structure—and with it, efficiency, quality, and long-term viability—to software projects that were previously characterized by scaling challenges, inconsistencies, poor integration, and ad hoc approaches to design and construction. Over the years, software architecture has been extended and applied to various domains to address specific challenges and requirements, including cloud computing, cybersecurity, and machine learning.The job of a modern software architect is to look at the overall system and choose what patterns, styles, and tactics best support not only the technical needs, but also the business needs, such as cost, staffing, and risks. They must do all this in a way that lets them evolve their product over (hopefully) years.Although quantum computers are becoming viable, it is unclear how they will manifest commercially. Many companies are trying to build the computing hardware, programming languages, and supporting tools; some service providers even offer access to their quantum computers. But how does an architect integrate or use these things with their system? Why would they? What benefits do these advances bring and with what costs?Are quantum computers just going to fit in like another database or compute node? Do they require special handling? How secure are they? Reliable? Performant? How do architects prepare their systems for using quantum computers?As organizations increasingly look to quantum computing for its potential to solve complex problems, applying software architecture principles to quantum computing can help manage complexity, achieve scalability and performance optimization, enable interoperability, support reliability and security, and promote collaboration and knowledge sharing. Software architecture provides a structured approach to designing quantum software systems that can effectively harness the power of quantum technologies.In our research project, Quantum Software Architecture, we are working to understand, document, and communicate the unique differences and challenges associated with incorporating quantum technologies into existing systems. We aim to identify and document useful, and potentially unique, abstractions and strategies for integrating quantum technologies in an existing system, with the goal of promoting successful adoption of these components.Quantum PromiseLike early-stage blockchain or AI, quantum technology is caught in a hype cycle of inflated expectations, followed by skepticism; it will be some time before quantum moves into genuine progress. For that potential to be realized, it's crucial to discern between the genuine promise of quantum and the buzz surrounding it. Quantum technologies promise us sensors, computers, and communication with capabilities that far exceed our current technologies. With the expected increases in compute power, applications previously constrained by classical compute limitations will become practical.The flagship example of gains promised by quantum computers is the breaking of RSA-2048, an encryption scheme widely used today. Cracking the code requires factoring a 2,048-bit number, which would take current computers on the order of trillions of years to compute. Quantum computers are expected to be able to perform the same computation within hours or perhaps seconds. This potential leap in efficiency still demonstrates the impressive powers of quantum technologies.The quantum promise is very narrow in scope, and this narrowness is one of the reasons why quantum computers will not be replacing classical computers but will instead be used as accelerating co-processors like graphics processing units (GPUs) or video cards. There is no advantage in performing basic computations, such as addition, multiplication, and division, on a quantum computer. Instead, quantum can offer improvements for algorithms requiring optimizations, searches, Fourier transforms, and prime factorization. Applications that can benefit from these algorithms are portfolio optimizations, machine learning, drug discovery, and logistics optimization. Applications in encryption breaking and chemistry and material science are exceptionally promising.While there are some possibilities for quantum computers to speed up specific, existing large computations, their most profound promise lies in leveraging their ability to compute all variations of the solution at precisely the same time to unlock new frontiers of computation and tackle currently incalculable problems.
+
+
+
+
+
+
+                            Figure 1: Quantum Speedup
+                            
+                              
+                                Reprinted with permission from Disentangling Hype from Practicality: On Realistically Achieving Quantum Advantage by Torsten Hoefler, Thomas Häner, and Matthias Troyer.
+
+
+
+What Is a Quantum Computer, and How Does It Work?In understanding quantum computers and how they work with classical computers, it is helpful to consider the GPU. The GPU started off as a video card. Users did not directly interact with the video card, but instead with the CPU that used it. The same is true for quantum technologies. The quantum processing unit (QPU) will not be directly accessible by a user and requires a controller (often called a quantum controller). It is this combination of quantum controller and QPU together that we refer to as a quantum computer or QC.Systems architects should expect to see quantum computers presented much like GPU instances or offerings are provided today. GPU instances include a compute or controller node with some number of CPUs, some memory, and some set of GPU resources. Similarly, a QC will have a controller with some number of classical CPUs, memory, and an attached QPU.Where a QPU differs from a GPU is in how it accelerates a computation. GPUs use specialized hardware architecture designed to efficiently run the same small mathematical processes over and over across many cores in parallel. QPUs accelerate computation by giving access to a new class of algorithms (bounded-error quantum polynomial time or BQP) through the use of superposition, entanglement, and interference. This class of algorithms, while few in number, offers quadratic and exponential speedups to their classical counterparts.What We’re Learning: Architecture Considerations for Quantum ComputersAs quantum compute technology advances and becomes more complex, planning for its integration becomes increasingly pressing for the Department of Defense. In our work exploring software architectures for systems with quantum components, our goal is to provide a foundation for developing effective software architectures that optimize quantum technology capabilities while managing its demands. We aim to understand, document, and communicate the unique differences and challenges associated with incorporating quantum technologies into existing systems. We will identify and document useful, potentially unique, abstractions and strategies for integrating quantum technologies in an existing system, with the goal of promoting successful adoption of these components. Here is what we are learning along the way.Transient Data on Quantum ComputersQuantum computers do not use bits or bytes, such as in classical computers, but instead use quantum bits or qubits. Qubits do not store single bits of data in a state of 0 or 1; instead they assume a state of superposition, an intermediate stage between 0 and 1—akin to the concept embodied in Schrödinger's Cat. The superpositioned state of a qubit, much like the cat's fate inside the box, remains inaccessible to us. Upon reading the qubit, the state collapses into a classical 0 or 1, resulting in the loss of all information within the quantum state.Compounding the problem, the lifespan of data on qubits is exceptionally brief. As of February 2022, lifespans of 10-100 milliseconds are common, with the longest recorded lifespan reaching five seconds. Calculations must be performed swiftly within this time frame, limiting the types of computation that can be done, and the data must be reloaded after each computation.As such, loading data onto a QPU is an essential part of the process and is required for every computation. In the worst case, data loading requires an exponential amount of time, effectively negating any potential quantum speedup. In the future, quantum sensors will make it possible to feed data directly into the QC.Discovery and utilization of methods to efficiently load useful data onto a QPU are paramount for finding quantum advantage over purely classical systems.Quantum Compilation StackA fundamental construct of quantum computing is the quantum circuit. Executing a quantum algorithm often requires the creation of an appropriate circuit, a process like the classical approach where a logic-gate-filled circuit is devised for each computation. This process is akin to repeatedly reconfiguring a field-programmable gate array (FPGA) or programming an analog computer for each individual use case.Quantum circuits are then compiled down into machine code specifically tailored for a target QPU. This translation from high-level algorithm design to low-level machine code can be seen in frameworks such as IBM’s where OpenQASM is compiled down to Qiskit-Pulse.The choices made during the generation and optimization of these quantum circuits—such as the selection of the quantum programming language, error correction mechanisms, or the provisions for dynamic reallocation—can all have significant downstream effects.Sometimes it is necessary for lower-level compilation details to leak into higher levels of design or architecture. For example, in the earlier days of chip design, endianness and byte packing inhibited interoperability. At this stage, it is hard to predict what may need to be exposed among quantum compilers and toolchains.Predictability, Reproducibility, and Non-DeterminismStandard algorithms rely on the behavior of traditional software being 100 percent reproducible. For example, a classical computer will add the same two numbers repeatedly and give the same result every time. Unless we intentionally add randomness or introduce errors from improperly managed concurrent operations, classical computers function in completely deterministic ways.Many algorithms such as those in neural networks and machine learning are statistical systems that do not give clear yes-or-no answers. Rather, they express a percentage of confidence in their output. Giving a probabilistic response does not mean, however, that the system is nondeterministic. Given the same input and compute ability, the system would return the exact same confidence.Due to the physics of quantum mechanics, quantum computers are nondeterministic and unreliable. Even for the simplest computation, a quantum computer may sometimes return the wrong answer. Fault-tolerant quantum computing will require many approaches to masking, reducing, or correcting this quantum noise. Until we have fault-tolerant quantum computers, system architects must be prepared to manage the natural nondeterminism of these machines. Typically, they use a “voting” style algorithm that runs multiple times to show the right answer. Combining a statistical algorithm with an uncertain, nondeterministic system leads to its own challenges.However, quantum computers may make statistical algorithms much faster. When training, a machine learning algorithm uses a set of random starting conditions to give it options and avoid getting stuck on sub-optimal solutions. With a classical computer, the system chooses one starting state at a time. Quantum computers should, essentially, be able to compute many variations (starting conditions) of the model at the same time. This ability is a subtle, yet powerful feature of quantum computers. The algorithm would need to be redesigned to take advantage of the quantum properties, but it would obviate the need to wrap classical algorithms with approaches such as Monte-Carlo simulations. However, because those variations are generated internally within the quantum circuits, the approach is nondeterministic. We would forego determinism to run vastly more iterations in one computational pass.Lastly, quantum properties such as superposition and nondeterminism make circuit reproducibility difficult. Due to this lack of reproducibility, current techniques for unit and integration testing will need to be re-thought.Quantum DeploymentQuantum technologies are likely to follow similar commercialization patterns as other disruptive technologies over the past decade. Due to the complexity, physical requirements, and cost of quantum hardware, we can expect large portions of the user base to access the quantum resources through an “as a service” business model: Quantum Compute as a Service. The offerings will come as a combination of quantum hardware with varying features in the quantum controller. We do not expect such an offering to differ from existing HPC models; the needs will be the same. Architects will need to be prepared to get the necessary data (partitioning, transmit, caching, etc.) to the remote quantum computer offering.Quantum MetricsDependable metrics have always been crucial for evaluating computer performance, whether for gaming, sales, or conducting high-level scientific computations. The definition of these metrics has evolved over time, reflecting the progress in the field of computing.In the 1990s, clock cycles or megahertz served as the popular measure of computer speed. While this was more of a sales strategy than an accurate measure of performance, megahertz served as a reasonable proxy for speed when all computers ran the same OS and functioned in a similar manner. As we reached the limits of clock cycle speed, we sought performance improvements through other means: enhancing instructions per clock cycle, parallelizing instructions (SIMD), optimizing thread scheduling and utilization, and eventually transitioning to multi-core systems.The terms operations per second and floating-point operations per second (FLOPS) became commonplace in the computing community as more descriptive metrics. As of the writing of this post Oak Ridge National Laboratory (ORNL) houses the world’s fastest supercomputer, Frontier, with a speed of 1.194 exaflops.However, FLOPS measures computing speed and does not reflect the data storage capacity or the scale of computations a computer can handle. When evaluating a service offering from a large online provider, we look at the number of cores, CPU memory, and, in the case of GPUs, the model number and memory size. With the growing prominence of large language models (LLMs) we need GPUs with substantial memory to accommodate these extensive models. Factors such as FLOPS, the number of cores, memory interface, and bandwidth become secondary.Quantum computers today are often compared through the number of qubits and sold by compute time. However, these metrics are limiting, as they do not consider factors like qubit connectivity, error rates, gate speed, or qubit type, which can restrict the algorithmic capability of the QPU.While more nuanced metrics such as quantum volume (QV) and Circuit Layer Operations Per Second (CLOPS) allow for better comparisons between quantum computers, they may not be sufficient for architects to make comprehensive decisions.Future metrics for quantum computing might need to account for error rates, gate speed, qubit connectivity, qubit lifespan, and many other factors that influence the overall computational power and efficiency of a quantum computer. It is also plausible that we may end up renting computational capacity in terms of qubit-hours, but the specifics would depend on the technological developments and the evolving needs of the users.In essence, measuring capacity or workload on a quantum computer and how we will rent such computational power are open questions and exciting frontiers of research in this rapidly evolving field.Looking AheadWe will be hosting the Workshop on Software Architecture Concerns for Quantum (WOSAQ) at IEEE Quantum Week on September 21, 2023. This workshop will explore some of the topics in this blog post more deeply, with a goal of growing the body of knowledge for quantum software engineers and developing a research roadmap for the future.
+
+
+
+
+Additional Resources
+
+
+Read "Achieving the Quantum Advantage in Software" by Jason Larkin and Daniel Justice.Read the conference paper "Evaluation of QAOA Based on the Approximation Ratio of Individual Samples" by Jason Larkin, Matías Jonsson, Daniel Justice, Gian Giacomo Guerreschi (Intel).
+
+
+
+
+
+Written By
+
+
+
+
+
+
+
+Daniel Justice
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+
+
+
+
+
+Andrew O. Mellinger
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+More By The Authors
+
+
+
+11 Leading Practices When Implementing a Container Strategy
+
+
+
+
+
+
+November 8, 2021 • By
+          
+            
+               Andrew O. Mellinger,
+            
+          
+            
+               William Nichols,
+            
+          
+            
+               Jay Palat
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+AI Engineering: 11 Foundational Practices for Decision Makers
+
+
+
+
+
+
+December 9, 2019 • By
+          
+            
+               Ipek Ozkaya,
+            
+          
+            
+               Angela Horneman,
+            
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+
+A Platform for Dynamic Defense Technologies
+
+
+
+
+
+
+April 18, 2016 • By
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+More In Quantum Computing
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+
+
+
+PUBLISHED IN
+
+Quantum Computing
+
+
+
+CITE
+https://doi.org/10.58012/hqd8-zr24
+
+Get Citation
+
+
+
+SHARE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Get updates on our latest work.
+
+      Sign up to have the latest post sent to your inbox weekly.
+    
+Subscribe
+Get our RSS feed
+
+
+
+More In Quantum Computing
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+
+
+
+
+
+Cite This Post
+×
+
+
+
+
+
+
+
+
+
+
+
+AMS
+
+
+
+
+APA
+
+
+
+
+Chicago
+
+
+
+
+IEEE
+
+
+
+
+BibTeX
+
+
+
+
+
+
+AMS Citation
+Justice, D., and Mellinger, A., 2023: The Need for Quantum Software Architecture. Carnegie Mellon University, Software Engineering Institute's Insights (blog), Accessed September 7, 2023, https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+APA Citation
+Justice, D., & Mellinger, A. (2023, August 28). The Need for Quantum Software Architecture. Retrieved September 7, 2023, from https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+Chicago Citation
+Justice, Daniel, and Andrew Mellinger. "The Need for Quantum Software Architecture." Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, August 28, 2023. https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+IEEE Citation
+D. Justice, and A. Mellinger, "The Need for Quantum Software Architecture," Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, 28-Aug-2023 [Online]. Available: https://doi.org/10.58012/hqd8-zr24. [Accessed: 7-Sep-2023].
+Copy
+
+
+BibTeX Code
+@misc{justice_2023,author={Justice, Daniel and Mellinger, Andrew},title={The Need for Quantum Software Architecture},month={Aug},year={2023},howpublished={Carnegie Mellon University, Software Engineering Institute's Insights (blog)},url={https://doi.org/10.58012/hqd8-zr24},note={Accessed: 2023-Sep-7}}
+Copy
+
+
+
+
+
+
+
+
+
+
+
+
+
+Cite This Post
+×
+
+
+
+
+
+
+
+
+
+
+
+AMS
+
+
+
+
+APA
+
+
+
+
+Chicago
+
+
+
+
+IEEE
+
+
+
+
+BibTeX
+
+
+
+
+
+
+AMS Citation
+Justice, D., and Mellinger, A., 2023: The Need for Quantum Software Architecture. Carnegie Mellon University, Software Engineering Institute's Insights (blog), Accessed September 7, 2023, https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+APA Citation
+Justice, D., & Mellinger, A. (2023, August 28). The Need for Quantum Software Architecture. Retrieved September 7, 2023, from https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+Chicago Citation
+Justice, Daniel, and Andrew Mellinger. "The Need for Quantum Software Architecture." Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, August 28, 2023. https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+IEEE Citation
+D. Justice, and A. Mellinger, "The Need for Quantum Software Architecture," Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, 28-Aug-2023 [Online]. Available: https://doi.org/10.58012/hqd8-zr24. [Accessed: 7-Sep-2023].
+Copy
+
+
+BibTeX Code
+@misc{justice_2023,author={Justice, Daniel and Mellinger, Andrew},title={The Need for Quantum Software Architecture},month={Aug},year={2023},howpublished={Carnegie Mellon University, Software Engineering Institute's Insights (blog)},url={https://doi.org/10.58012/hqd8-zr24},note={Accessed: 2023-Sep-7}}
+Copy
+
+
+
+
+
+
+
+
+
+
+Cite This Post
+×
+
+
+
+
+
+
+
+
+
+
+
+AMS
+
+
+
+
+APA
+
+
+
+
+Chicago
+
+
+
+
+IEEE
+
+
+
+
+BibTeX
+
+
+
+
+
+
+AMS Citation
+Justice, D., and Mellinger, A., 2023: The Need for Quantum Software Architecture. Carnegie Mellon University, Software Engineering Institute's Insights (blog), Accessed September 7, 2023, https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+APA Citation
+Justice, D., & Mellinger, A. (2023, August 28). The Need for Quantum Software Architecture. Retrieved September 7, 2023, from https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+Chicago Citation
+Justice, Daniel, and Andrew Mellinger. "The Need for Quantum Software Architecture." Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, August 28, 2023. https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+IEEE Citation
+D. Justice, and A. Mellinger, "The Need for Quantum Software Architecture," Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, 28-Aug-2023 [Online]. Available: https://doi.org/10.58012/hqd8-zr24. [Accessed: 7-Sep-2023].
+Copy
+
+
+BibTeX Code
+@misc{justice_2023,author={Justice, Daniel and Mellinger, Andrew},title={The Need for Quantum Software Architecture},month={Aug},year={2023},howpublished={Carnegie Mellon University, Software Engineering Institute's Insights (blog)},url={https://doi.org/10.58012/hqd8-zr24},note={Accessed: 2023-Sep-7}}
+Copy
+
+
+
+
+
+Cite This Post
+×
+
+
+
+
+
+
+
+
+
+
+AMS
+
+
+
+
+APA
+
+
+
+
+Chicago
+
+
+
+
+IEEE
+
+
+
+
+BibTeX
+
+
+
+
+
+
+AMS Citation
+Justice, D., and Mellinger, A., 2023: The Need for Quantum Software Architecture. Carnegie Mellon University, Software Engineering Institute's Insights (blog), Accessed September 7, 2023, https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+APA Citation
+Justice, D., & Mellinger, A. (2023, August 28). The Need for Quantum Software Architecture. Retrieved September 7, 2023, from https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+Chicago Citation
+Justice, Daniel, and Andrew Mellinger. "The Need for Quantum Software Architecture." Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, August 28, 2023. https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+IEEE Citation
+D. Justice, and A. Mellinger, "The Need for Quantum Software Architecture," Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, 28-Aug-2023 [Online]. Available: https://doi.org/10.58012/hqd8-zr24. [Accessed: 7-Sep-2023].
+Copy
+
+
+BibTeX Code
+@misc{justice_2023,author={Justice, Daniel and Mellinger, Andrew},title={The Need for Quantum Software Architecture},month={Aug},year={2023},howpublished={Carnegie Mellon University, Software Engineering Institute's Insights (blog)},url={https://doi.org/10.58012/hqd8-zr24},note={Accessed: 2023-Sep-7}}
+Copy
+
+
+
+
+
+
+
+
+
+
+
+
+AMS
+
+
+
+
+APA
+
+
+
+
+Chicago
+
+
+
+
+IEEE
+
+
+
+
+BibTeX
+
+
+
+
+
+
+AMS Citation
+Justice, D., and Mellinger, A., 2023: The Need for Quantum Software Architecture. Carnegie Mellon University, Software Engineering Institute's Insights (blog), Accessed September 7, 2023, https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+APA Citation
+Justice, D., & Mellinger, A. (2023, August 28). The Need for Quantum Software Architecture. Retrieved September 7, 2023, from https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+Chicago Citation
+Justice, Daniel, and Andrew Mellinger. "The Need for Quantum Software Architecture." Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, August 28, 2023. https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+IEEE Citation
+D. Justice, and A. Mellinger, "The Need for Quantum Software Architecture," Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, 28-Aug-2023 [Online]. Available: https://doi.org/10.58012/hqd8-zr24. [Accessed: 7-Sep-2023].
+Copy
+
+
+BibTeX Code
+@misc{justice_2023,author={Justice, Daniel and Mellinger, Andrew},title={The Need for Quantum Software Architecture},month={Aug},year={2023},howpublished={Carnegie Mellon University, Software Engineering Institute's Insights (blog)},url={https://doi.org/10.58012/hqd8-zr24},note={Accessed: 2023-Sep-7}}
+Copy
+
+
+
+
+AMS Citation
+Justice, D., and Mellinger, A., 2023: The Need for Quantum Software Architecture. Carnegie Mellon University, Software Engineering Institute's Insights (blog), Accessed September 7, 2023, https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+APA Citation
+Justice, D., & Mellinger, A. (2023, August 28). The Need for Quantum Software Architecture. Retrieved September 7, 2023, from https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+Chicago Citation
+Justice, Daniel, and Andrew Mellinger. "The Need for Quantum Software Architecture." Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, August 28, 2023. https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+
+IEEE Citation
+D. Justice, and A. Mellinger, "The Need for Quantum Software Architecture," Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, 28-Aug-2023 [Online]. Available: https://doi.org/10.58012/hqd8-zr24. [Accessed: 7-Sep-2023].
+Copy
+
+
+BibTeX Code
+@misc{justice_2023,author={Justice, Daniel and Mellinger, Andrew},title={The Need for Quantum Software Architecture},month={Aug},year={2023},howpublished={Carnegie Mellon University, Software Engineering Institute's Insights (blog)},url={https://doi.org/10.58012/hqd8-zr24},note={Accessed: 2023-Sep-7}}
+Copy
+
+
+AMS Citation
+Justice, D., and Mellinger, A., 2023: The Need for Quantum Software Architecture. Carnegie Mellon University, Software Engineering Institute's Insights (blog), Accessed September 7, 2023, https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+APA Citation
+Justice, D., & Mellinger, A. (2023, August 28). The Need for Quantum Software Architecture. Retrieved September 7, 2023, from https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+Chicago Citation
+Justice, Daniel, and Andrew Mellinger. "The Need for Quantum Software Architecture." Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, August 28, 2023. https://doi.org/10.58012/hqd8-zr24.
+Copy
+
+IEEE Citation
+D. Justice, and A. Mellinger, "The Need for Quantum Software Architecture," Carnegie Mellon University, Software Engineering Institute's Insights (blog). Carnegie Mellon's Software Engineering Institute, 28-Aug-2023 [Online]. Available: https://doi.org/10.58012/hqd8-zr24. [Accessed: 7-Sep-2023].
+Copy
+
+BibTeX Code
+@misc{justice_2023,author={Justice, Daniel and Mellinger, Andrew},title={The Need for Quantum Software Architecture},month={Aug},year={2023},howpublished={Carnegie Mellon University, Software Engineering Institute's Insights (blog)},url={https://doi.org/10.58012/hqd8-zr24},note={Accessed: 2023-Sep-7}}
+Copy
+
+
+
+
+
+
+                  The Need for Quantum Software Architecture
+                
+
+
+
+
+
+
+
+
+Daniel Justice
+            
+            
+          
+            
+            
+            
+              and Andrew O. Mellinger
+
+
+
+
+
+        August 28, 2023
+      
+
+
+
+
+
+
+PUBLISHED IN
+
+Quantum Computing
+
+
+
+CITE
+https://doi.org/10.58012/hqd8-zr24
+
+Get Citation
+
+
+
+SHARE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+As the SEI embarks on a new project, Quantum Software Architecture, we’re setting out to answer an important question: If we want to adapt or build systems today that will one day use quantum hardware, how will that change our current approach to software architecture? In this blog post, we will discuss what a quantum computer is, the advantages quantum computing promises, and the concerns architects are likely to have when integrating quantum components into their systems.Extending Software Architecture to QuantumWhen software architecture coalesced as a distinct discipline in the 1990s, it brought structure—and with it, efficiency, quality, and long-term viability—to software projects that were previously characterized by scaling challenges, inconsistencies, poor integration, and ad hoc approaches to design and construction. Over the years, software architecture has been extended and applied to various domains to address specific challenges and requirements, including cloud computing, cybersecurity, and machine learning.The job of a modern software architect is to look at the overall system and choose what patterns, styles, and tactics best support not only the technical needs, but also the business needs, such as cost, staffing, and risks. They must do all this in a way that lets them evolve their product over (hopefully) years.Although quantum computers are becoming viable, it is unclear how they will manifest commercially. Many companies are trying to build the computing hardware, programming languages, and supporting tools; some service providers even offer access to their quantum computers. But how does an architect integrate or use these things with their system? Why would they? What benefits do these advances bring and with what costs?Are quantum computers just going to fit in like another database or compute node? Do they require special handling? How secure are they? Reliable? Performant? How do architects prepare their systems for using quantum computers?As organizations increasingly look to quantum computing for its potential to solve complex problems, applying software architecture principles to quantum computing can help manage complexity, achieve scalability and performance optimization, enable interoperability, support reliability and security, and promote collaboration and knowledge sharing. Software architecture provides a structured approach to designing quantum software systems that can effectively harness the power of quantum technologies.In our research project, Quantum Software Architecture, we are working to understand, document, and communicate the unique differences and challenges associated with incorporating quantum technologies into existing systems. We aim to identify and document useful, and potentially unique, abstractions and strategies for integrating quantum technologies in an existing system, with the goal of promoting successful adoption of these components.Quantum PromiseLike early-stage blockchain or AI, quantum technology is caught in a hype cycle of inflated expectations, followed by skepticism; it will be some time before quantum moves into genuine progress. For that potential to be realized, it's crucial to discern between the genuine promise of quantum and the buzz surrounding it. Quantum technologies promise us sensors, computers, and communication with capabilities that far exceed our current technologies. With the expected increases in compute power, applications previously constrained by classical compute limitations will become practical.The flagship example of gains promised by quantum computers is the breaking of RSA-2048, an encryption scheme widely used today. Cracking the code requires factoring a 2,048-bit number, which would take current computers on the order of trillions of years to compute. Quantum computers are expected to be able to perform the same computation within hours or perhaps seconds. This potential leap in efficiency still demonstrates the impressive powers of quantum technologies.The quantum promise is very narrow in scope, and this narrowness is one of the reasons why quantum computers will not be replacing classical computers but will instead be used as accelerating co-processors like graphics processing units (GPUs) or video cards. There is no advantage in performing basic computations, such as addition, multiplication, and division, on a quantum computer. Instead, quantum can offer improvements for algorithms requiring optimizations, searches, Fourier transforms, and prime factorization. Applications that can benefit from these algorithms are portfolio optimizations, machine learning, drug discovery, and logistics optimization. Applications in encryption breaking and chemistry and material science are exceptionally promising.While there are some possibilities for quantum computers to speed up specific, existing large computations, their most profound promise lies in leveraging their ability to compute all variations of the solution at precisely the same time to unlock new frontiers of computation and tackle currently incalculable problems.
+
+
+
+
+
+
+                            Figure 1: Quantum Speedup
+                            
+                              
+                                Reprinted with permission from Disentangling Hype from Practicality: On Realistically Achieving Quantum Advantage by Torsten Hoefler, Thomas Häner, and Matthias Troyer.
+
+
+
+What Is a Quantum Computer, and How Does It Work?In understanding quantum computers and how they work with classical computers, it is helpful to consider the GPU. The GPU started off as a video card. Users did not directly interact with the video card, but instead with the CPU that used it. The same is true for quantum technologies. The quantum processing unit (QPU) will not be directly accessible by a user and requires a controller (often called a quantum controller). It is this combination of quantum controller and QPU together that we refer to as a quantum computer or QC.Systems architects should expect to see quantum computers presented much like GPU instances or offerings are provided today. GPU instances include a compute or controller node with some number of CPUs, some memory, and some set of GPU resources. Similarly, a QC will have a controller with some number of classical CPUs, memory, and an attached QPU.Where a QPU differs from a GPU is in how it accelerates a computation. GPUs use specialized hardware architecture designed to efficiently run the same small mathematical processes over and over across many cores in parallel. QPUs accelerate computation by giving access to a new class of algorithms (bounded-error quantum polynomial time or BQP) through the use of superposition, entanglement, and interference. This class of algorithms, while few in number, offers quadratic and exponential speedups to their classical counterparts.What We’re Learning: Architecture Considerations for Quantum ComputersAs quantum compute technology advances and becomes more complex, planning for its integration becomes increasingly pressing for the Department of Defense. In our work exploring software architectures for systems with quantum components, our goal is to provide a foundation for developing effective software architectures that optimize quantum technology capabilities while managing its demands. We aim to understand, document, and communicate the unique differences and challenges associated with incorporating quantum technologies into existing systems. We will identify and document useful, potentially unique, abstractions and strategies for integrating quantum technologies in an existing system, with the goal of promoting successful adoption of these components. Here is what we are learning along the way.Transient Data on Quantum ComputersQuantum computers do not use bits or bytes, such as in classical computers, but instead use quantum bits or qubits. Qubits do not store single bits of data in a state of 0 or 1; instead they assume a state of superposition, an intermediate stage between 0 and 1—akin to the concept embodied in Schrödinger's Cat. The superpositioned state of a qubit, much like the cat's fate inside the box, remains inaccessible to us. Upon reading the qubit, the state collapses into a classical 0 or 1, resulting in the loss of all information within the quantum state.Compounding the problem, the lifespan of data on qubits is exceptionally brief. As of February 2022, lifespans of 10-100 milliseconds are common, with the longest recorded lifespan reaching five seconds. Calculations must be performed swiftly within this time frame, limiting the types of computation that can be done, and the data must be reloaded after each computation.As such, loading data onto a QPU is an essential part of the process and is required for every computation. In the worst case, data loading requires an exponential amount of time, effectively negating any potential quantum speedup. In the future, quantum sensors will make it possible to feed data directly into the QC.Discovery and utilization of methods to efficiently load useful data onto a QPU are paramount for finding quantum advantage over purely classical systems.Quantum Compilation StackA fundamental construct of quantum computing is the quantum circuit. Executing a quantum algorithm often requires the creation of an appropriate circuit, a process like the classical approach where a logic-gate-filled circuit is devised for each computation. This process is akin to repeatedly reconfiguring a field-programmable gate array (FPGA) or programming an analog computer for each individual use case.Quantum circuits are then compiled down into machine code specifically tailored for a target QPU. This translation from high-level algorithm design to low-level machine code can be seen in frameworks such as IBM’s where OpenQASM is compiled down to Qiskit-Pulse.The choices made during the generation and optimization of these quantum circuits—such as the selection of the quantum programming language, error correction mechanisms, or the provisions for dynamic reallocation—can all have significant downstream effects.Sometimes it is necessary for lower-level compilation details to leak into higher levels of design or architecture. For example, in the earlier days of chip design, endianness and byte packing inhibited interoperability. At this stage, it is hard to predict what may need to be exposed among quantum compilers and toolchains.Predictability, Reproducibility, and Non-DeterminismStandard algorithms rely on the behavior of traditional software being 100 percent reproducible. For example, a classical computer will add the same two numbers repeatedly and give the same result every time. Unless we intentionally add randomness or introduce errors from improperly managed concurrent operations, classical computers function in completely deterministic ways.Many algorithms such as those in neural networks and machine learning are statistical systems that do not give clear yes-or-no answers. Rather, they express a percentage of confidence in their output. Giving a probabilistic response does not mean, however, that the system is nondeterministic. Given the same input and compute ability, the system would return the exact same confidence.Due to the physics of quantum mechanics, quantum computers are nondeterministic and unreliable. Even for the simplest computation, a quantum computer may sometimes return the wrong answer. Fault-tolerant quantum computing will require many approaches to masking, reducing, or correcting this quantum noise. Until we have fault-tolerant quantum computers, system architects must be prepared to manage the natural nondeterminism of these machines. Typically, they use a “voting” style algorithm that runs multiple times to show the right answer. Combining a statistical algorithm with an uncertain, nondeterministic system leads to its own challenges.However, quantum computers may make statistical algorithms much faster. When training, a machine learning algorithm uses a set of random starting conditions to give it options and avoid getting stuck on sub-optimal solutions. With a classical computer, the system chooses one starting state at a time. Quantum computers should, essentially, be able to compute many variations (starting conditions) of the model at the same time. This ability is a subtle, yet powerful feature of quantum computers. The algorithm would need to be redesigned to take advantage of the quantum properties, but it would obviate the need to wrap classical algorithms with approaches such as Monte-Carlo simulations. However, because those variations are generated internally within the quantum circuits, the approach is nondeterministic. We would forego determinism to run vastly more iterations in one computational pass.Lastly, quantum properties such as superposition and nondeterminism make circuit reproducibility difficult. Due to this lack of reproducibility, current techniques for unit and integration testing will need to be re-thought.Quantum DeploymentQuantum technologies are likely to follow similar commercialization patterns as other disruptive technologies over the past decade. Due to the complexity, physical requirements, and cost of quantum hardware, we can expect large portions of the user base to access the quantum resources through an “as a service” business model: Quantum Compute as a Service. The offerings will come as a combination of quantum hardware with varying features in the quantum controller. We do not expect such an offering to differ from existing HPC models; the needs will be the same. Architects will need to be prepared to get the necessary data (partitioning, transmit, caching, etc.) to the remote quantum computer offering.Quantum MetricsDependable metrics have always been crucial for evaluating computer performance, whether for gaming, sales, or conducting high-level scientific computations. The definition of these metrics has evolved over time, reflecting the progress in the field of computing.In the 1990s, clock cycles or megahertz served as the popular measure of computer speed. While this was more of a sales strategy than an accurate measure of performance, megahertz served as a reasonable proxy for speed when all computers ran the same OS and functioned in a similar manner. As we reached the limits of clock cycle speed, we sought performance improvements through other means: enhancing instructions per clock cycle, parallelizing instructions (SIMD), optimizing thread scheduling and utilization, and eventually transitioning to multi-core systems.The terms operations per second and floating-point operations per second (FLOPS) became commonplace in the computing community as more descriptive metrics. As of the writing of this post Oak Ridge National Laboratory (ORNL) houses the world’s fastest supercomputer, Frontier, with a speed of 1.194 exaflops.However, FLOPS measures computing speed and does not reflect the data storage capacity or the scale of computations a computer can handle. When evaluating a service offering from a large online provider, we look at the number of cores, CPU memory, and, in the case of GPUs, the model number and memory size. With the growing prominence of large language models (LLMs) we need GPUs with substantial memory to accommodate these extensive models. Factors such as FLOPS, the number of cores, memory interface, and bandwidth become secondary.Quantum computers today are often compared through the number of qubits and sold by compute time. However, these metrics are limiting, as they do not consider factors like qubit connectivity, error rates, gate speed, or qubit type, which can restrict the algorithmic capability of the QPU.While more nuanced metrics such as quantum volume (QV) and Circuit Layer Operations Per Second (CLOPS) allow for better comparisons between quantum computers, they may not be sufficient for architects to make comprehensive decisions.Future metrics for quantum computing might need to account for error rates, gate speed, qubit connectivity, qubit lifespan, and many other factors that influence the overall computational power and efficiency of a quantum computer. It is also plausible that we may end up renting computational capacity in terms of qubit-hours, but the specifics would depend on the technological developments and the evolving needs of the users.In essence, measuring capacity or workload on a quantum computer and how we will rent such computational power are open questions and exciting frontiers of research in this rapidly evolving field.Looking AheadWe will be hosting the Workshop on Software Architecture Concerns for Quantum (WOSAQ) at IEEE Quantum Week on September 21, 2023. This workshop will explore some of the topics in this blog post more deeply, with a goal of growing the body of knowledge for quantum software engineers and developing a research roadmap for the future.
+
+
+
+
+Additional Resources
+
+
+Read "Achieving the Quantum Advantage in Software" by Jason Larkin and Daniel Justice.Read the conference paper "Evaluation of QAOA Based on the Approximation Ratio of Individual Samples" by Jason Larkin, Matías Jonsson, Daniel Justice, Gian Giacomo Guerreschi (Intel).
+
+
+
+
+
+Written By
+
+
+
+
+
+
+
+Daniel Justice
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+
+
+
+
+
+Andrew O. Mellinger
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+More By The Authors
+
+
+
+11 Leading Practices When Implementing a Container Strategy
+
+
+
+
+
+
+November 8, 2021 • By
+          
+            
+               Andrew O. Mellinger,
+            
+          
+            
+               William Nichols,
+            
+          
+            
+               Jay Palat
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+AI Engineering: 11 Foundational Practices for Decision Makers
+
+
+
+
+
+
+December 9, 2019 • By
+          
+            
+               Ipek Ozkaya,
+            
+          
+            
+               Angela Horneman,
+            
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+
+A Platform for Dynamic Defense Technologies
+
+
+
+
+
+
+April 18, 2016 • By
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+More In Quantum Computing
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+
+
+
+                  The Need for Quantum Software Architecture
+                
+
+
+
+
+
+
+
+
+Daniel Justice
+            
+            
+          
+            
+            
+            
+              and Andrew O. Mellinger
+
+
+
+
+
+        August 28, 2023
+      
+
+
+
+
+
+
+
+
+
+
+
+Daniel Justice
+            
+            
+          
+            
+            
+            
+              and Andrew O. Mellinger
+
+
+
+
+
+        August 28, 2023
+      
+
+
+
+
+
+
+Daniel Justice
+            
+            
+          
+            
+            
+            
+              and Andrew O. Mellinger
+
+
+
+
+
+        August 28, 2023
+      
+
+
+
+Daniel Justice
+            
+            
+          
+            
+            
+            
+              and Andrew O. Mellinger
+
+
+Daniel Justice
+            
+            
+          
+            
+            
+            
+              and Andrew O. Mellinger
+
+
+PUBLISHED IN
+
+Quantum Computing
+
+
+
+CITE
+https://doi.org/10.58012/hqd8-zr24
+
+Get Citation
+
+
+
+SHARE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+PUBLISHED IN
+
+Quantum Computing
+
+
+CITE
+https://doi.org/10.58012/hqd8-zr24
+
+Get Citation
+
+
+SHARE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+As the SEI embarks on a new project, Quantum Software Architecture, we’re setting out to answer an important question: If we want to adapt or build systems today that will one day use quantum hardware, how will that change our current approach to software architecture? In this blog post, we will discuss what a quantum computer is, the advantages quantum computing promises, and the concerns architects are likely to have when integrating quantum components into their systems.Extending Software Architecture to QuantumWhen software architecture coalesced as a distinct discipline in the 1990s, it brought structure—and with it, efficiency, quality, and long-term viability—to software projects that were previously characterized by scaling challenges, inconsistencies, poor integration, and ad hoc approaches to design and construction. Over the years, software architecture has been extended and applied to various domains to address specific challenges and requirements, including cloud computing, cybersecurity, and machine learning.The job of a modern software architect is to look at the overall system and choose what patterns, styles, and tactics best support not only the technical needs, but also the business needs, such as cost, staffing, and risks. They must do all this in a way that lets them evolve their product over (hopefully) years.Although quantum computers are becoming viable, it is unclear how they will manifest commercially. Many companies are trying to build the computing hardware, programming languages, and supporting tools; some service providers even offer access to their quantum computers. But how does an architect integrate or use these things with their system? Why would they? What benefits do these advances bring and with what costs?Are quantum computers just going to fit in like another database or compute node? Do they require special handling? How secure are they? Reliable? Performant? How do architects prepare their systems for using quantum computers?As organizations increasingly look to quantum computing for its potential to solve complex problems, applying software architecture principles to quantum computing can help manage complexity, achieve scalability and performance optimization, enable interoperability, support reliability and security, and promote collaboration and knowledge sharing. Software architecture provides a structured approach to designing quantum software systems that can effectively harness the power of quantum technologies.In our research project, Quantum Software Architecture, we are working to understand, document, and communicate the unique differences and challenges associated with incorporating quantum technologies into existing systems. We aim to identify and document useful, and potentially unique, abstractions and strategies for integrating quantum technologies in an existing system, with the goal of promoting successful adoption of these components.Quantum PromiseLike early-stage blockchain or AI, quantum technology is caught in a hype cycle of inflated expectations, followed by skepticism; it will be some time before quantum moves into genuine progress. For that potential to be realized, it's crucial to discern between the genuine promise of quantum and the buzz surrounding it. Quantum technologies promise us sensors, computers, and communication with capabilities that far exceed our current technologies. With the expected increases in compute power, applications previously constrained by classical compute limitations will become practical.The flagship example of gains promised by quantum computers is the breaking of RSA-2048, an encryption scheme widely used today. Cracking the code requires factoring a 2,048-bit number, which would take current computers on the order of trillions of years to compute. Quantum computers are expected to be able to perform the same computation within hours or perhaps seconds. This potential leap in efficiency still demonstrates the impressive powers of quantum technologies.The quantum promise is very narrow in scope, and this narrowness is one of the reasons why quantum computers will not be replacing classical computers but will instead be used as accelerating co-processors like graphics processing units (GPUs) or video cards. There is no advantage in performing basic computations, such as addition, multiplication, and division, on a quantum computer. Instead, quantum can offer improvements for algorithms requiring optimizations, searches, Fourier transforms, and prime factorization. Applications that can benefit from these algorithms are portfolio optimizations, machine learning, drug discovery, and logistics optimization. Applications in encryption breaking and chemistry and material science are exceptionally promising.While there are some possibilities for quantum computers to speed up specific, existing large computations, their most profound promise lies in leveraging their ability to compute all variations of the solution at precisely the same time to unlock new frontiers of computation and tackle currently incalculable problems.
+
+
+
+
+
+
+                            Figure 1: Quantum Speedup
+                            
+                              
+                                Reprinted with permission from Disentangling Hype from Practicality: On Realistically Achieving Quantum Advantage by Torsten Hoefler, Thomas Häner, and Matthias Troyer.
+
+
+
+What Is a Quantum Computer, and How Does It Work?In understanding quantum computers and how they work with classical computers, it is helpful to consider the GPU. The GPU started off as a video card. Users did not directly interact with the video card, but instead with the CPU that used it. The same is true for quantum technologies. The quantum processing unit (QPU) will not be directly accessible by a user and requires a controller (often called a quantum controller). It is this combination of quantum controller and QPU together that we refer to as a quantum computer or QC.Systems architects should expect to see quantum computers presented much like GPU instances or offerings are provided today. GPU instances include a compute or controller node with some number of CPUs, some memory, and some set of GPU resources. Similarly, a QC will have a controller with some number of classical CPUs, memory, and an attached QPU.Where a QPU differs from a GPU is in how it accelerates a computation. GPUs use specialized hardware architecture designed to efficiently run the same small mathematical processes over and over across many cores in parallel. QPUs accelerate computation by giving access to a new class of algorithms (bounded-error quantum polynomial time or BQP) through the use of superposition, entanglement, and interference. This class of algorithms, while few in number, offers quadratic and exponential speedups to their classical counterparts.What We’re Learning: Architecture Considerations for Quantum ComputersAs quantum compute technology advances and becomes more complex, planning for its integration becomes increasingly pressing for the Department of Defense. In our work exploring software architectures for systems with quantum components, our goal is to provide a foundation for developing effective software architectures that optimize quantum technology capabilities while managing its demands. We aim to understand, document, and communicate the unique differences and challenges associated with incorporating quantum technologies into existing systems. We will identify and document useful, potentially unique, abstractions and strategies for integrating quantum technologies in an existing system, with the goal of promoting successful adoption of these components. Here is what we are learning along the way.Transient Data on Quantum ComputersQuantum computers do not use bits or bytes, such as in classical computers, but instead use quantum bits or qubits. Qubits do not store single bits of data in a state of 0 or 1; instead they assume a state of superposition, an intermediate stage between 0 and 1—akin to the concept embodied in Schrödinger's Cat. The superpositioned state of a qubit, much like the cat's fate inside the box, remains inaccessible to us. Upon reading the qubit, the state collapses into a classical 0 or 1, resulting in the loss of all information within the quantum state.Compounding the problem, the lifespan of data on qubits is exceptionally brief. As of February 2022, lifespans of 10-100 milliseconds are common, with the longest recorded lifespan reaching five seconds. Calculations must be performed swiftly within this time frame, limiting the types of computation that can be done, and the data must be reloaded after each computation.As such, loading data onto a QPU is an essential part of the process and is required for every computation. In the worst case, data loading requires an exponential amount of time, effectively negating any potential quantum speedup. In the future, quantum sensors will make it possible to feed data directly into the QC.Discovery and utilization of methods to efficiently load useful data onto a QPU are paramount for finding quantum advantage over purely classical systems.Quantum Compilation StackA fundamental construct of quantum computing is the quantum circuit. Executing a quantum algorithm often requires the creation of an appropriate circuit, a process like the classical approach where a logic-gate-filled circuit is devised for each computation. This process is akin to repeatedly reconfiguring a field-programmable gate array (FPGA) or programming an analog computer for each individual use case.Quantum circuits are then compiled down into machine code specifically tailored for a target QPU. This translation from high-level algorithm design to low-level machine code can be seen in frameworks such as IBM’s where OpenQASM is compiled down to Qiskit-Pulse.The choices made during the generation and optimization of these quantum circuits—such as the selection of the quantum programming language, error correction mechanisms, or the provisions for dynamic reallocation—can all have significant downstream effects.Sometimes it is necessary for lower-level compilation details to leak into higher levels of design or architecture. For example, in the earlier days of chip design, endianness and byte packing inhibited interoperability. At this stage, it is hard to predict what may need to be exposed among quantum compilers and toolchains.Predictability, Reproducibility, and Non-DeterminismStandard algorithms rely on the behavior of traditional software being 100 percent reproducible. For example, a classical computer will add the same two numbers repeatedly and give the same result every time. Unless we intentionally add randomness or introduce errors from improperly managed concurrent operations, classical computers function in completely deterministic ways.Many algorithms such as those in neural networks and machine learning are statistical systems that do not give clear yes-or-no answers. Rather, they express a percentage of confidence in their output. Giving a probabilistic response does not mean, however, that the system is nondeterministic. Given the same input and compute ability, the system would return the exact same confidence.Due to the physics of quantum mechanics, quantum computers are nondeterministic and unreliable. Even for the simplest computation, a quantum computer may sometimes return the wrong answer. Fault-tolerant quantum computing will require many approaches to masking, reducing, or correcting this quantum noise. Until we have fault-tolerant quantum computers, system architects must be prepared to manage the natural nondeterminism of these machines. Typically, they use a “voting” style algorithm that runs multiple times to show the right answer. Combining a statistical algorithm with an uncertain, nondeterministic system leads to its own challenges.However, quantum computers may make statistical algorithms much faster. When training, a machine learning algorithm uses a set of random starting conditions to give it options and avoid getting stuck on sub-optimal solutions. With a classical computer, the system chooses one starting state at a time. Quantum computers should, essentially, be able to compute many variations (starting conditions) of the model at the same time. This ability is a subtle, yet powerful feature of quantum computers. The algorithm would need to be redesigned to take advantage of the quantum properties, but it would obviate the need to wrap classical algorithms with approaches such as Monte-Carlo simulations. However, because those variations are generated internally within the quantum circuits, the approach is nondeterministic. We would forego determinism to run vastly more iterations in one computational pass.Lastly, quantum properties such as superposition and nondeterminism make circuit reproducibility difficult. Due to this lack of reproducibility, current techniques for unit and integration testing will need to be re-thought.Quantum DeploymentQuantum technologies are likely to follow similar commercialization patterns as other disruptive technologies over the past decade. Due to the complexity, physical requirements, and cost of quantum hardware, we can expect large portions of the user base to access the quantum resources through an “as a service” business model: Quantum Compute as a Service. The offerings will come as a combination of quantum hardware with varying features in the quantum controller. We do not expect such an offering to differ from existing HPC models; the needs will be the same. Architects will need to be prepared to get the necessary data (partitioning, transmit, caching, etc.) to the remote quantum computer offering.Quantum MetricsDependable metrics have always been crucial for evaluating computer performance, whether for gaming, sales, or conducting high-level scientific computations. The definition of these metrics has evolved over time, reflecting the progress in the field of computing.In the 1990s, clock cycles or megahertz served as the popular measure of computer speed. While this was more of a sales strategy than an accurate measure of performance, megahertz served as a reasonable proxy for speed when all computers ran the same OS and functioned in a similar manner. As we reached the limits of clock cycle speed, we sought performance improvements through other means: enhancing instructions per clock cycle, parallelizing instructions (SIMD), optimizing thread scheduling and utilization, and eventually transitioning to multi-core systems.The terms operations per second and floating-point operations per second (FLOPS) became commonplace in the computing community as more descriptive metrics. As of the writing of this post Oak Ridge National Laboratory (ORNL) houses the world’s fastest supercomputer, Frontier, with a speed of 1.194 exaflops.However, FLOPS measures computing speed and does not reflect the data storage capacity or the scale of computations a computer can handle. When evaluating a service offering from a large online provider, we look at the number of cores, CPU memory, and, in the case of GPUs, the model number and memory size. With the growing prominence of large language models (LLMs) we need GPUs with substantial memory to accommodate these extensive models. Factors such as FLOPS, the number of cores, memory interface, and bandwidth become secondary.Quantum computers today are often compared through the number of qubits and sold by compute time. However, these metrics are limiting, as they do not consider factors like qubit connectivity, error rates, gate speed, or qubit type, which can restrict the algorithmic capability of the QPU.While more nuanced metrics such as quantum volume (QV) and Circuit Layer Operations Per Second (CLOPS) allow for better comparisons between quantum computers, they may not be sufficient for architects to make comprehensive decisions.Future metrics for quantum computing might need to account for error rates, gate speed, qubit connectivity, qubit lifespan, and many other factors that influence the overall computational power and efficiency of a quantum computer. It is also plausible that we may end up renting computational capacity in terms of qubit-hours, but the specifics would depend on the technological developments and the evolving needs of the users.In essence, measuring capacity or workload on a quantum computer and how we will rent such computational power are open questions and exciting frontiers of research in this rapidly evolving field.Looking AheadWe will be hosting the Workshop on Software Architecture Concerns for Quantum (WOSAQ) at IEEE Quantum Week on September 21, 2023. This workshop will explore some of the topics in this blog post more deeply, with a goal of growing the body of knowledge for quantum software engineers and developing a research roadmap for the future.
+
+
+                            Figure 1: Quantum Speedup
+                            
+                              
+                                Reprinted with permission from Disentangling Hype from Practicality: On Realistically Achieving Quantum Advantage by Torsten Hoefler, Thomas Häner, and Matthias Troyer.
+
+
+Additional Resources
+
+
+Read "Achieving the Quantum Advantage in Software" by Jason Larkin and Daniel Justice.Read the conference paper "Evaluation of QAOA Based on the Approximation Ratio of Individual Samples" by Jason Larkin, Matías Jonsson, Daniel Justice, Gian Giacomo Guerreschi (Intel).
+
+
+
+Written By
+
+
+
+
+
+
+
+Daniel Justice
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+
+
+
+
+
+Andrew O. Mellinger
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+More By The Authors
+
+
+
+11 Leading Practices When Implementing a Container Strategy
+
+
+
+
+
+
+November 8, 2021 • By
+          
+            
+               Andrew O. Mellinger,
+            
+          
+            
+               William Nichols,
+            
+          
+            
+               Jay Palat
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+AI Engineering: 11 Foundational Practices for Decision Makers
+
+
+
+
+
+
+December 9, 2019 • By
+          
+            
+               Ipek Ozkaya,
+            
+          
+            
+               Angela Horneman,
+            
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+
+A Platform for Dynamic Defense Technologies
+
+
+
+
+
+
+April 18, 2016 • By
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+More In Quantum Computing
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+Written By
+
+
+
+
+
+
+
+Daniel Justice
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+
+
+
+
+
+Andrew O. Mellinger
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+
+
+
+
+
+Daniel Justice
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+
+
+Daniel Justice
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+
+
+
+Andrew O. Mellinger
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+
+
+
+
+
+Andrew O. Mellinger
+
+Author Page
+
+
+Digital Library Publications
+
+
+Send a Message
+
+
+More By The Authors
+
+
+
+11 Leading Practices When Implementing a Container Strategy
+
+
+
+
+
+
+November 8, 2021 • By
+          
+            
+               Andrew O. Mellinger,
+            
+          
+            
+               William Nichols,
+            
+          
+            
+               Jay Palat
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+AI Engineering: 11 Foundational Practices for Decision Makers
+
+
+
+
+
+
+December 9, 2019 • By
+          
+            
+               Ipek Ozkaya,
+            
+          
+            
+               Angela Horneman,
+            
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+
+A Platform for Dynamic Defense Technologies
+
+
+
+
+
+
+April 18, 2016 • By
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+
+11 Leading Practices When Implementing a Container Strategy
+
+
+
+
+
+
+November 8, 2021 • By
+          
+            
+               Andrew O. Mellinger,
+            
+          
+            
+               William Nichols,
+            
+          
+            
+               Jay Palat
+
+
+
+
+
+
+
+
+November 8, 2021 • By
+          
+            
+               Andrew O. Mellinger,
+            
+          
+            
+               William Nichols,
+            
+          
+            
+               Jay Palat
+
+
+
+
+
+
+November 8, 2021 • By
+          
+            
+               Andrew O. Mellinger,
+            
+          
+            
+               William Nichols,
+            
+          
+            
+               Jay Palat
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+AI Engineering: 11 Foundational Practices for Decision Makers
+
+
+
+
+
+
+December 9, 2019 • By
+          
+            
+               Ipek Ozkaya,
+            
+          
+            
+               Angela Horneman,
+            
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+
+
+December 9, 2019 • By
+          
+            
+               Ipek Ozkaya,
+            
+          
+            
+               Angela Horneman,
+            
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+December 9, 2019 • By
+          
+            
+               Ipek Ozkaya,
+            
+          
+            
+               Angela Horneman,
+            
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+A Platform for Dynamic Defense Technologies
+
+
+
+
+
+
+April 18, 2016 • By
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+
+
+April 18, 2016 • By
+          
+            
+               Andrew O. Mellinger
+
+
+
+
+
+
+April 18, 2016 • By
+          
+            
+               Andrew O. Mellinger
+
+
+More In Quantum Computing
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+PUBLISHED IN
+
+Quantum Computing
+
+
+
+CITE
+https://doi.org/10.58012/hqd8-zr24
+
+Get Citation
+
+
+
+SHARE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Get updates on our latest work.
+
+      Sign up to have the latest post sent to your inbox weekly.
+    
+Subscribe
+Get our RSS feed
+
+
+
+More In Quantum Computing
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+
+PUBLISHED IN
+
+Quantum Computing
+
+
+
+CITE
+https://doi.org/10.58012/hqd8-zr24
+
+Get Citation
+
+
+
+SHARE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Get updates on our latest work.
+
+      Sign up to have the latest post sent to your inbox weekly.
+    
+Subscribe
+Get our RSS feed
+
+
+
+More In Quantum Computing
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+PUBLISHED IN
+
+Quantum Computing
+
+
+CITE
+https://doi.org/10.58012/hqd8-zr24
+
+Get Citation
+
+
+SHARE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Get updates on our latest work.
+
+      Sign up to have the latest post sent to your inbox weekly.
+    
+Subscribe
+Get our RSS feed
+
+
+Get updates on our latest work.
+
+      Sign up to have the latest post sent to your inbox weekly.
+    
+Subscribe
+Get our RSS feed
+
+More In Quantum Computing
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+Cybersecurity of Quantum Computing: A New Frontier
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+
+
+April 10, 2023 • By
+          
+            
+               Tom Scanlon
+
+
+
+
+Achieving the Quantum Advantage in Software
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+
+
+
+December 16, 2019 • By
+          
+            
+               Jason Larkin,
+            
+          
+            
+               Daniel Justice
+
+
+
+Get updates on our latest work.
+
+        Each week, our researchers write about the latest in software engineering, cybersecurity and artificial intelligence. Sign up to get the latest post sent to your inbox the day it's published.
+      
+Subscribe
+Get our RSS feed
+
+
+Get updates on our latest work.
+
+        Each week, our researchers write about the latest in software engineering, cybersecurity and artificial intelligence. Sign up to get the latest post sent to your inbox the day it's published.
+      
+Subscribe
+Get our RSS feed
+
+
+Report a Vulnerability to CERT/CC
+Subscribe to SEI Bulletin
+Request Permission to Use SEI Materials
+
+
+
+
+
+
+            Carnegie Mellon University
+            Software Engineering Institute
+4500 Fifth Avenue
+Pittsburgh, PA 15213-2612
+412-268-5800
+
+
+
+
+
+
+
+
+
+
+
+
+Contact Us
+
+
+
+
+Office Locations
+Additional Sites Directory
+Legal
+Privacy Notice
+CMU Ethics Hotline
+www.sei.cmu.edu
+
+
+
+2023
+
+Carnegie Mellon University
+
+
+
+
+
+            Carnegie Mellon University
+            Software Engineering Institute
+4500 Fifth Avenue
+Pittsburgh, PA 15213-2612
+412-268-5800
+
+
+
+
+
+
+
+
+
+
+Contact Us
+
+Carnegie Mellon University

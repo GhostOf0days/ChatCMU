@@ -1,0 +1,1320 @@
+ReLM enables writing tests that are guaranteed to come from the set of valid strings, such as dates. Without ReLM, LLMs are free to complete prompts with non-date answers, which are difficult to assess.TL;DR: While large language models (LLMs) have been touted for their ability to generate natural-sounding text, there are concerns around potential negative effects of LLMs such as data memorization, bias, and inappropriate language. We introduce ReLM (MLSys ’23), a system for validating and querying LLMs using standard regular expressions. We demonstrate via validation tasks on memorization, bias, toxicity, and language understanding that ReLM achieves up to \(15\times\) higher system efficiency, \(2.5\times\) data efficiency, and increased prompt-tuning coverage compared to state-of-the-art ad-hoc queries.Consider playing a video game (perhaps in your youth). You randomly enter the following sequence in your controller:⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️Suddenly, your character becomes invincible. You’ve discovered the “secret” sequence that the game developer used for testing the levels. After this point in time, everything you do is trivial—the game is over, you win.I claim that using large language models (LLMs) to generate text content is similar to playing a game with such secret sequences. Rather than getting surprised to see a change in game state, users of LLMs may be surprised to see a response that is not quite right. It’s possible the LLM violates someone’s privacy, encodes a stereotype, contains explicit material, or hallucinates an event. However, unlike the game, it may be difficult to even reason about how that sequence manifested.LLMs operate over tokens (i.e., integers), which are translated via the tokenizer to text. For encoding systems such as Byte-Pair Encoding (BPE), each token maps to 1+ characters. Using the controller analogy, an LLM is a controller having 50000+ “buttons”, and certain buttons operate as “macros” over the string space. For example, ⇑ could represent ⬆️⬆️ and ⇓could represent ⬇️⬇️, enabling the same code to be represented with ⇑⇓⬅️➡️⬅️➡️🅱️🅰️. Importantly, the LLM is unaware of this equivalence mapping—a single edit changing ⬆️⬆️ to ⬆️⬇️ would invalidate ⇑ being substituted into the sequence. Writing “the” instead of “The” could result in a different response from the LLM, even though the difference is stylistic to humans. These tokenization artifacts combined with potential shortcomings in the LLM’s internal reasoning create a minefield of unassuming LLM “bugs”.The possibility that a model may deviate from the “correct” set of sequences motivates LLM validation—the task of evaluating a model’s behavior among many axes so that shortcomings can be identified and addressed. The problem can be much worse than our game example—when we expect a single sequence, nearly all sequences are incorrect, a process that exponentially diverges as a function of the sequence length. Intuitively, it gets much harder to output the right sequence when the sequence length grows—correctly “dancing” ⬆️⬆️⬇️⬇️ is easier than ⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️.  In the lab, it’s hard to notice the consequences of generating an incorrect sequence, but as society embraces LLMs for more serious tasks (e.g., writing emails, filing taxes), we’ll want to have more confidence that they work as intended.Short of formal verification, the best validation mechanism we have is to build comprehensive test suites for characterizing model behavior over a set of input sequences. Benchmarking efforts such as HeLM are continuing to increase the scope of LLM validation by providing a gamut of test sequences. While I strongly agree with the motivation, I ask: Should we be rethinking how tests themselves are written? Can we systematically generalize sequences to high-level patterns such that test writers don’t have to reason about all the peculiar LLM implementation details that we just discussed?With game codes, the code is entered through the controller. The result, on the other hand, is reflected in the game state (i.e., your character becomes invincible, which I represent with a good outcome ✓). But how does this analogy hold for LLMs?⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️⇒✓For autoregressive LLMs, typically the input is a sequence and the output is a sequence, and both of these are in the same space (e.g., strings of human language). For example, prompting the model with the word “The” would perhaps be followed by “ cat” in the sense that it is either likely or simply possible according to the LLM and the sampling procedure.Ⓣⓗⓔ⇒ ⓒⓐⓣIf “ cat” is considered a good answer, then we “won” the sequence lottery (represented by ✓). If the sequence is considered a bad answer e.g., the misspelling ” kAt”, then we lost (represented by ✗).Ⓣⓗⓔ ⓒⓐⓣ⇒✓Ⓣⓗⓔ ⓚⒶⓣ⇒✗Keep in mind that the token-level encoding is not unique for a given string sequence, so the above LLM examples will have many representations. The number of representations compounds with the size of the reference strings e.g., all the possible misspellings of ” cat”. Furthermore, the LLM will output a distribution over good and bad sequences, so we’d like to summarize them e.g., by measuring what percentage of sequences are good.As test designers, our goal is to quantitatively measure some aspect of the LLM’s behavior. As we are studying a general notion of tests, we’ll introduce a small amount of formalism to argue our points. Let us call a test, \(T\), which takes a model, \(M\), and returns a boolean represented with 0 (bad answer) or 1 (good answer).$$T: M → \{0, 1\}$$For classification tasks, \(T\) represents whether the model, \(M\), classified a particular example correctly; the average of these tests is reported with test accuracy. Since correct classification boils down to the predicted class (\(y_\text{pred}:=M(x)\)) matching the ground-truth class (\(y\)), this test can be implemented in one line of code.y_pred == y What does \(T\) look like for LLMs? Let’s say we want to test if “The” is followed by “ cat”. Constructing such a test is straightforward, because we can just check if the statement is true. We can imagine \(x\) representing “The” and \(y\) representing “ cat”. If \(y\) is sampled from some distribution (i.e., it’s a random variable), we can get many samples to compute the mean score. Depending on the application, we may or may not be interested in including all the encodings discussed previously as well as possible variations of the base pattern e.g., misspellings.Because of the potentially massive number of sequences involved in a test, LLM tests are both more difficult to express and evaluate, leading to tests with insufficient coverage. For example, if we happened to miss some prompt that does lead to “ cat”, our test had a false negative—it concluded it was not possible when it actually was. If we were to check if “ cat” is the most likely string following “The”, we may get false positives in the omitted cases where “ kAt” was more likely. The test designer must carefully consider trading off such sources of error with the implementation and execution complexity of the test.With traditional string-level APIs, it’s difficult to make testing trade-offs without rewriting the testing logic altogether—one has to write testing code that explicitly samples from the distribution of interest (e.g., the choice of encodings and misspellings). For example, a privacy-oriented user would want you to be reasonably sure that the LLM couldn’t emit their private information, even with the presence of encoding or misspelling artifacts. Such a minor change in the test’s scope would result in dramatic changes to the underlying test implementation. To make matters worse, testing becomes even more difficult when the base pattern of interest is a combinatorial object, such as integers, dates, URL strings, and phone numbers—sets too large to enumerate.To give a concrete example of false positives and false negatives, let’s consider a simple test of knowledge: Does the LLM know George Washington’s birth date? As shown in the figure below, we formulate this ‘test’ by asking the model to rank 4 choices. Such multiple-choice questions are common in today’s benchmark suites because they are simple to implement. However, 4 choices do not cover all birth dates; what if the model was lucky enough to eliminate the other 3 answers and just guess? That would be a false positive. As shown below, the correct date of February 22, 1732, is chosen by the model because it is the most likely; thus this test concludes the model does know the birth date.We can also try free response, as shown in in the following figure. However, the most likely reply is not a date and thus penalizes the model for being more general than the test task—a possible false negative. “this day in 1732” and “a farm” are reasonable completions for the fill-in-the-blank, yet an automated test system would mark them as not matching the solution set.A more natural alternative, and one that we explore via our work in ReLM (MLSys ’23), would be to only consider answers that follow a specific date-related format. The way we evaluate this query is by constraining generation to be of the form <Month> <Day>, <Year>, as if we had a “complete” multiple choice solution set, which is too large to enumerate. Because this pattern contains exactly all the solutions of interest, the test minimizes spurious conclusions due to false positives and false negatives. In doing so, we confirm a true negative—GPT-2XL believes George Washington was born on July 4, 1732. That’s of course factually incorrect, but we didn’t trick ourselves into thinking the LLM knew the answer when it didn’t.While we don’t have the space to exactly write out how to run these queries in ReLM, you can rest assured that you’ll find the above example in our code.Regular expressions describe the regular languages and are a way of specifying text patterns. Many text-processing tools, such as grep, use regular expressions to locate patterns in text. At a high level, regular languages can describe patterns using the primitives of string literals, disjunction (“OR”), and repetitions. For the purpose of this blog, you can think of regular languages as allowing you to interpolate between a 4-way multiple choice (e.g., A OR B OR C OR D) and one with a combinatorial explosion of choices in a free-response (e.g., all strings of length \(N\)). At the implementation level, regular expressions can be expressed with an equivalent directed graph, called an automaton, that represents all sequences via the edge transitions in the graph.ReLM is a Regular Expression engine for Language Models. As shown below, ReLM is an automaton-based constrained decoding system on top of the LLM. Users of ReLM construct queries that encompass the test pattern and how to execute it. Because the user explicitly describes the pattern of interest, ReLM can avoid doing extra work that results in false negatives. Additionally, since the user describes variations of the pattern (e.g., encodings and misspellings), ReLM can cover often-ignored elements in the test set, avoiding false positives. We can essentially describe any pattern or mutation of the pattern as long as the effects can be correctly propagated to the final automaton. Thankfully, there is a rich theory on ways to perform operations on automata (e.g., including misspellings and rewrites), which we utilize when compiling the final automaton. Thus, the user can 1) exactly specify large sets of interest and 2) cover the tokenization artifacts mentioned in the introduction.Since the same query pattern can be used for many execution parameters, a single test encoded as a regular expression can lead to a variety of analyses. For example, the query in the above figure could be modified to include all misspellings of the base pattern as well as all the encodings. Additionally, the user can choose between sampling from the test set or finding the most likely sequence in it. Our paper’s results exploring queries surrounding memorization (extracting URLs), gender bias (measuring distributional bias in professions), toxicity (extracting offensive words), and language understanding (completing the correct answer) show that ReLM achieves up to \(15\times\) higher system efficiency in extracting memorized URLs, \(2.5\times\) data efficiency in extracting offensive content, and increased statistical and prompt-tuning coverage compared to state-of-the-art ad-hoc queries.Our results indicate that subtle differences in query specification can yield dramatically different results. For example, we find that randomly sampling from a URL prefix “https://www.” tends to generate invalid or duplicated URLs. ReLM avoids such inefficiency by returning strings matching the valid URL pattern sorted by likelihood. Likewise, searching over the space of all encodings as well as misspellings enables the \(2.5\times\) data efficiency in extracting toxic content from the LLM and results in different results on the gender bias task. Finally, we can recover prompt tuning behavior on the LAMBADA dataset by modifying the regular expression pattern, demonstrating that even language understanding tasks can benefit from such pattern specification.In this blog, we outlined why it’s important to think of LLM tests in terms of patterns rather than individual sequences. Our work introduces ReLM, a Regular Expression engine for Language Models, to enable test writers to easily write LLM tests that can be described via pattern matching. If you’re interested in learning more about ReLM and how it can reduce the burden of LLM validation, please check out our paper (MLSys ’23) as well as our open-source code.DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of CMU.Name * Email * Website  Save my name, email, and website in this browser for the next time I comment. 
+
+[instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+[ Home ][ Submissions ][ About ]HomeSubmissionsAboutHomeSubmissionsAboutResearchEducational
+
+♥101
+ 5445
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+ Navigating to Objects in the Real World
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+
+Input your search keywords and press Enter.
+
+
+
+
+
+
+
+Categories:
+
+Research
+Educational
+
+ 
+
+
+
+
+
+
+
+machine learning Research
+Validating Large Language Models with ReLM
+
+
+Authors
+Michael Kuchnik 
+
+
+Affiliations
+
+
+Published
+                        June 5, 2023                    
+
+DOI
+
+
+
+
+
+
+
+ReLM enables writing tests that are guaranteed to come from the set of valid strings, such as dates. Without ReLM, LLMs are free to complete prompts with non-date answers, which are difficult to assess.
+
+TL;DR: While large language models (LLMs) have been touted for their ability to generate natural-sounding text, there are concerns around potential negative effects of LLMs such as data memorization, bias, and inappropriate language. We introduce ReLM (MLSys ’23), a system for validating and querying LLMs using standard regular expressions. We demonstrate via validation tasks on memorization, bias, toxicity, and language understanding that ReLM achieves up to \(15\times\) higher system efficiency, \(2.5\times\) data efficiency, and increased prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+The Winners and Losers in Sequence Prediction
+Consider playing a video game (perhaps in your youth). You randomly enter the following sequence in your controller:
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️
+Suddenly, your character becomes invincible. You’ve discovered the “secret” sequence that the game developer used for testing the levels. After this point in time, everything you do is trivial—the game is over, you win.
+I claim that using large language models (LLMs) to generate text content is similar to playing a game with such secret sequences. Rather than getting surprised to see a change in game state, users of LLMs may be surprised to see a response that is not quite right. It’s possible the LLM violates someone’s privacy, encodes a stereotype, contains explicit material, or hallucinates an event. However, unlike the game, it may be difficult to even reason about how that sequence manifested.
+LLMs operate over tokens (i.e., integers), which are translated via the tokenizer to text. For encoding systems such as Byte-Pair Encoding (BPE), each token maps to 1+ characters. Using the controller analogy, an LLM is a controller having 50000+ “buttons”, and certain buttons operate as “macros” over the string space. For example, ⇑ could represent ⬆️⬆️ and ⇓could represent ⬇️⬇️, enabling the same code to be represented with ⇑⇓⬅️➡️⬅️➡️🅱️🅰️. Importantly, the LLM is unaware of this equivalence mapping—a single edit changing ⬆️⬆️ to ⬆️⬇️ would invalidate ⇑ being substituted into the sequence. Writing “the” instead of “The” could result in a different response from the LLM, even though the difference is stylistic to humans. These tokenization artifacts combined with potential shortcomings in the LLM’s internal reasoning create a minefield of unassuming LLM “bugs”.
+The possibility that a model may deviate from the “correct” set of sequences motivates LLM validation—the task of evaluating a model’s behavior among many axes so that shortcomings can be identified and addressed. The problem can be much worse than our game example—when we expect a single sequence, nearly all sequences are incorrect, a process that exponentially diverges as a function of the sequence length. Intuitively, it gets much harder to output the right sequence when the sequence length grows—correctly “dancing” ⬆️⬆️⬇️⬇️ is easier than ⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️.  In the lab, it’s hard to notice the consequences of generating an incorrect sequence, but as society embraces LLMs for more serious tasks (e.g., writing emails, filing taxes), we’ll want to have more confidence that they work as intended.
+Short of formal verification, the best validation mechanism we have is to build comprehensive test suites for characterizing model behavior over a set of input sequences. Benchmarking efforts such as HeLM are continuing to increase the scope of LLM validation by providing a gamut of test sequences. While I strongly agree with the motivation, I ask: Should we be rethinking how tests themselves are written? Can we systematically generalize sequences to high-level patterns such that test writers don’t have to reason about all the peculiar LLM implementation details that we just discussed?
+Background: Prompting LLMs
+With game codes, the code is entered through the controller. The result, on the other hand, is reflected in the game state (i.e., your character becomes invincible, which I represent with a good outcome ✓). But how does this analogy hold for LLMs?
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️⇒✓
+For autoregressive LLMs, typically the input is a sequence and the output is a sequence, and both of these are in the same space (e.g., strings of human language). For example, prompting the model with the word “The” would perhaps be followed by “ cat” in the sense that it is either likely or simply possible according to the LLM and the sampling procedure.
+Ⓣⓗⓔ⇒ ⓒⓐⓣ
+If “ cat” is considered a good answer, then we “won” the sequence lottery (represented by ✓). If the sequence is considered a bad answer e.g., the misspelling ” kAt”, then we lost (represented by ✗).
+Ⓣⓗⓔ ⓒⓐⓣ⇒✓
+Ⓣⓗⓔ ⓚⒶⓣ⇒✗
+Keep in mind that the token-level encoding is not unique for a given string sequence, so the above LLM examples will have many representations. The number of representations compounds with the size of the reference strings e.g., all the possible misspellings of ” cat”. Furthermore, the LLM will output a distribution over good and bad sequences, so we’d like to summarize them e.g., by measuring what percentage of sequences are good.
+Problem: Testing LLMs
+As test designers, our goal is to quantitatively measure some aspect of the LLM’s behavior. As we are studying a general notion of tests, we’ll introduce a small amount of formalism to argue our points. Let us call a test, \(T\), which takes a model, \(M\), and returns a boolean represented with 0 (bad answer) or 1 (good answer).
+$$T: M → \{0, 1\}$$
+For classification tasks, \(T\) represents whether the model, \(M\), classified a particular example correctly; the average of these tests is reported with test accuracy. Since correct classification boils down to the predicted class (\(y_\text{pred}:=M(x)\)) matching the ground-truth class (\(y\)), this test can be implemented in one line of code.
+y_pred == y 
+What does \(T\) look like for LLMs? Let’s say we want to test if “The” is followed by “ cat”. Constructing such a test is straightforward, because we can just check if the statement is true. We can imagine \(x\) representing “The” and \(y\) representing “ cat”. If \(y\) is sampled from some distribution (i.e., it’s a random variable), we can get many samples to compute the mean score. Depending on the application, we may or may not be interested in including all the encodings discussed previously as well as possible variations of the base pattern e.g., misspellings.
+Because of the potentially massive number of sequences involved in a test, LLM tests are both more difficult to express and evaluate, leading to tests with insufficient coverage. For example, if we happened to miss some prompt that does lead to “ cat”, our test had a false negative—it concluded it was not possible when it actually was. If we were to check if “ cat” is the most likely string following “The”, we may get false positives in the omitted cases where “ kAt” was more likely. The test designer must carefully consider trading off such sources of error with the implementation and execution complexity of the test.
+With traditional string-level APIs, it’s difficult to make testing trade-offs without rewriting the testing logic altogether—one has to write testing code that explicitly samples from the distribution of interest (e.g., the choice of encodings and misspellings). For example, a privacy-oriented user would want you to be reasonably sure that the LLM couldn’t emit their private information, even with the presence of encoding or misspelling artifacts. Such a minor change in the test’s scope would result in dramatic changes to the underlying test implementation. To make matters worse, testing becomes even more difficult when the base pattern of interest is a combinatorial object, such as integers, dates, URL strings, and phone numbers—sets too large to enumerate.
+Example: Does GPT-2XL know George Washington’s birth date?
+To give a concrete example of false positives and false negatives, let’s consider a simple test of knowledge: Does the LLM know George Washington’s birth date? As shown in the figure below, we formulate this ‘test’ by asking the model to rank 4 choices. Such multiple-choice questions are common in today’s benchmark suites because they are simple to implement. However, 4 choices do not cover all birth dates; what if the model was lucky enough to eliminate the other 3 answers and just guess? That would be a false positive. As shown below, the correct date of February 22, 1732, is chosen by the model because it is the most likely; thus this test concludes the model does know the birth date.
+Multiple choice questions are prone to false positives because they can be arbitrarily easy. Solving this multiple choice can be accomplished by knowing George Washington was born before 1873. In this case, GPT-2XL assigns the highest likelihood to the correct answer.
+We can also try free response, as shown in in the following figure. However, the most likely reply is not a date and thus penalizes the model for being more general than the test task—a possible false negative. “this day in 1732” and “a farm” are reasonable completions for the fill-in-the-blank, yet an automated test system would mark them as not matching the solution set.
+Free response questions are prone to false negatives because the question’s and answer’s implicit constraints are not followed by the model. “this day in 1732” or “a farm” cannot match the reference answer because they do not follow a valid date format.
+A more natural alternative, and one that we explore via our work in ReLM (MLSys ’23), would be to only consider answers that follow a specific date-related format. The way we evaluate this query is by constraining generation to be of the form <Month> <Day>, <Year>, as if we had a “complete” multiple choice solution set, which is too large to enumerate. Because this pattern contains exactly all the solutions of interest, the test minimizes spurious conclusions due to false positives and false negatives. In doing so, we confirm a true negative—GPT-2XL believes George Washington was born on July 4, 1732. That’s of course factually incorrect, but we didn’t trick ourselves into thinking the LLM knew the answer when it didn’t.
+A ReLM query using the anticipated date pattern as a decoding constraint. GPT-2XL incorrectly thinks that July 4, 1732, is the most likely date that George Washington was born on.
+While we don’t have the space to exactly write out how to run these queries in ReLM, you can rest assured that you’ll find the above example in our code.
+The Case for ReLM
+Regular expressions describe the regular languages and are a way of specifying text patterns. Many text-processing tools, such as grep, use regular expressions to locate patterns in text. At a high level, regular languages can describe patterns using the primitives of string literals, disjunction (“OR”), and repetitions. For the purpose of this blog, you can think of regular languages as allowing you to interpolate between a 4-way multiple choice (e.g., A OR B OR C OR D) and one with a combinatorial explosion of choices in a free-response (e.g., all strings of length \(N\)). At the implementation level, regular expressions can be expressed with an equivalent directed graph, called an automaton, that represents all sequences via the edge transitions in the graph.
+ReLM is a Regular Expression engine for Language Models. As shown below, ReLM is an automaton-based constrained decoding system on top of the LLM. Users of ReLM construct queries that encompass the test pattern and how to execute it. Because the user explicitly describes the pattern of interest, ReLM can avoid doing extra work that results in false negatives. Additionally, since the user describes variations of the pattern (e.g., encodings and misspellings), ReLM can cover often-ignored elements in the test set, avoiding false positives. We can essentially describe any pattern or mutation of the pattern as long as the effects can be correctly propagated to the final automaton. Thankfully, there is a rich theory on ways to perform operations on automata (e.g., including misspellings and rewrites), which we utilize when compiling the final automaton. Thus, the user can 1) exactly specify large sets of interest and 2) cover the tokenization artifacts mentioned in the introduction.
+ReLM workflow with the query “The ((cat)|(dog))”. A regular expression query is compiled into an automaton, which is transformed into the LLM-specific set of token sequences representing the query. The query specifies alternative encodings and misspellings considered for the sampling distribution (not used here). Note that “Ġ” represents a space.
+Since the same query pattern can be used for many execution parameters, a single test encoded as a regular expression can lead to a variety of analyses. For example, the query in the above figure could be modified to include all misspellings of the base pattern as well as all the encodings. Additionally, the user can choose between sampling from the test set or finding the most likely sequence in it. Our paper’s results exploring queries surrounding memorization (extracting URLs), gender bias (measuring distributional bias in professions), toxicity (extracting offensive words), and language understanding (completing the correct answer) show that ReLM achieves up to \(15\times\) higher system efficiency in extracting memorized URLs, \(2.5\times\) data efficiency in extracting offensive content, and increased statistical and prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+Our results indicate that subtle differences in query specification can yield dramatically different results. For example, we find that randomly sampling from a URL prefix “https://www.” tends to generate invalid or duplicated URLs. ReLM avoids such inefficiency by returning strings matching the valid URL pattern sorted by likelihood. Likewise, searching over the space of all encodings as well as misspellings enables the \(2.5\times\) data efficiency in extracting toxic content from the LLM and results in different results on the gender bias task. Finally, we can recover prompt tuning behavior on the LAMBADA dataset by modifying the regular expression pattern, demonstrating that even language understanding tasks can benefit from such pattern specification.
+Conclusion
+In this blog, we outlined why it’s important to think of LLM tests in terms of patterns rather than individual sequences. Our work introduces ReLM, a Regular Expression engine for Language Models, to enable test writers to easily write LLM tests that can be described via pattern matching. If you’re interested in learning more about ReLM and how it can reduce the burden of LLM validation, please check out our paper (MLSys ’23) as well as our open-source code.
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of CMU.
+
+
+
+
+
+♥101
+ 5445
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+
+ Navigating to Objects in the Real World
+
+You Might Also Like
+
+
+
+Using Deep Learning to Help Us Understand Language Processing in the Brain
+May 31, 2019
+
+
+
+Policy Certificates and Minimax-Optimal PAC Bounds for Episodic Reinforcement Learning
+August 16, 2019
+
+
+
+Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+June 12, 2020
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+ 
+
+
+
+
+
+
+
+
+machine learning Research
+Validating Large Language Models with ReLM
+
+
+Authors
+Michael Kuchnik 
+
+
+Affiliations
+
+
+Published
+                        June 5, 2023                    
+
+DOI
+
+
+
+
+
+
+
+ReLM enables writing tests that are guaranteed to come from the set of valid strings, such as dates. Without ReLM, LLMs are free to complete prompts with non-date answers, which are difficult to assess.
+
+TL;DR: While large language models (LLMs) have been touted for their ability to generate natural-sounding text, there are concerns around potential negative effects of LLMs such as data memorization, bias, and inappropriate language. We introduce ReLM (MLSys ’23), a system for validating and querying LLMs using standard regular expressions. We demonstrate via validation tasks on memorization, bias, toxicity, and language understanding that ReLM achieves up to \(15\times\) higher system efficiency, \(2.5\times\) data efficiency, and increased prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+The Winners and Losers in Sequence Prediction
+Consider playing a video game (perhaps in your youth). You randomly enter the following sequence in your controller:
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️
+Suddenly, your character becomes invincible. You’ve discovered the “secret” sequence that the game developer used for testing the levels. After this point in time, everything you do is trivial—the game is over, you win.
+I claim that using large language models (LLMs) to generate text content is similar to playing a game with such secret sequences. Rather than getting surprised to see a change in game state, users of LLMs may be surprised to see a response that is not quite right. It’s possible the LLM violates someone’s privacy, encodes a stereotype, contains explicit material, or hallucinates an event. However, unlike the game, it may be difficult to even reason about how that sequence manifested.
+LLMs operate over tokens (i.e., integers), which are translated via the tokenizer to text. For encoding systems such as Byte-Pair Encoding (BPE), each token maps to 1+ characters. Using the controller analogy, an LLM is a controller having 50000+ “buttons”, and certain buttons operate as “macros” over the string space. For example, ⇑ could represent ⬆️⬆️ and ⇓could represent ⬇️⬇️, enabling the same code to be represented with ⇑⇓⬅️➡️⬅️➡️🅱️🅰️. Importantly, the LLM is unaware of this equivalence mapping—a single edit changing ⬆️⬆️ to ⬆️⬇️ would invalidate ⇑ being substituted into the sequence. Writing “the” instead of “The” could result in a different response from the LLM, even though the difference is stylistic to humans. These tokenization artifacts combined with potential shortcomings in the LLM’s internal reasoning create a minefield of unassuming LLM “bugs”.
+The possibility that a model may deviate from the “correct” set of sequences motivates LLM validation—the task of evaluating a model’s behavior among many axes so that shortcomings can be identified and addressed. The problem can be much worse than our game example—when we expect a single sequence, nearly all sequences are incorrect, a process that exponentially diverges as a function of the sequence length. Intuitively, it gets much harder to output the right sequence when the sequence length grows—correctly “dancing” ⬆️⬆️⬇️⬇️ is easier than ⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️.  In the lab, it’s hard to notice the consequences of generating an incorrect sequence, but as society embraces LLMs for more serious tasks (e.g., writing emails, filing taxes), we’ll want to have more confidence that they work as intended.
+Short of formal verification, the best validation mechanism we have is to build comprehensive test suites for characterizing model behavior over a set of input sequences. Benchmarking efforts such as HeLM are continuing to increase the scope of LLM validation by providing a gamut of test sequences. While I strongly agree with the motivation, I ask: Should we be rethinking how tests themselves are written? Can we systematically generalize sequences to high-level patterns such that test writers don’t have to reason about all the peculiar LLM implementation details that we just discussed?
+Background: Prompting LLMs
+With game codes, the code is entered through the controller. The result, on the other hand, is reflected in the game state (i.e., your character becomes invincible, which I represent with a good outcome ✓). But how does this analogy hold for LLMs?
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️⇒✓
+For autoregressive LLMs, typically the input is a sequence and the output is a sequence, and both of these are in the same space (e.g., strings of human language). For example, prompting the model with the word “The” would perhaps be followed by “ cat” in the sense that it is either likely or simply possible according to the LLM and the sampling procedure.
+Ⓣⓗⓔ⇒ ⓒⓐⓣ
+If “ cat” is considered a good answer, then we “won” the sequence lottery (represented by ✓). If the sequence is considered a bad answer e.g., the misspelling ” kAt”, then we lost (represented by ✗).
+Ⓣⓗⓔ ⓒⓐⓣ⇒✓
+Ⓣⓗⓔ ⓚⒶⓣ⇒✗
+Keep in mind that the token-level encoding is not unique for a given string sequence, so the above LLM examples will have many representations. The number of representations compounds with the size of the reference strings e.g., all the possible misspellings of ” cat”. Furthermore, the LLM will output a distribution over good and bad sequences, so we’d like to summarize them e.g., by measuring what percentage of sequences are good.
+Problem: Testing LLMs
+As test designers, our goal is to quantitatively measure some aspect of the LLM’s behavior. As we are studying a general notion of tests, we’ll introduce a small amount of formalism to argue our points. Let us call a test, \(T\), which takes a model, \(M\), and returns a boolean represented with 0 (bad answer) or 1 (good answer).
+$$T: M → \{0, 1\}$$
+For classification tasks, \(T\) represents whether the model, \(M\), classified a particular example correctly; the average of these tests is reported with test accuracy. Since correct classification boils down to the predicted class (\(y_\text{pred}:=M(x)\)) matching the ground-truth class (\(y\)), this test can be implemented in one line of code.
+y_pred == y 
+What does \(T\) look like for LLMs? Let’s say we want to test if “The” is followed by “ cat”. Constructing such a test is straightforward, because we can just check if the statement is true. We can imagine \(x\) representing “The” and \(y\) representing “ cat”. If \(y\) is sampled from some distribution (i.e., it’s a random variable), we can get many samples to compute the mean score. Depending on the application, we may or may not be interested in including all the encodings discussed previously as well as possible variations of the base pattern e.g., misspellings.
+Because of the potentially massive number of sequences involved in a test, LLM tests are both more difficult to express and evaluate, leading to tests with insufficient coverage. For example, if we happened to miss some prompt that does lead to “ cat”, our test had a false negative—it concluded it was not possible when it actually was. If we were to check if “ cat” is the most likely string following “The”, we may get false positives in the omitted cases where “ kAt” was more likely. The test designer must carefully consider trading off such sources of error with the implementation and execution complexity of the test.
+With traditional string-level APIs, it’s difficult to make testing trade-offs without rewriting the testing logic altogether—one has to write testing code that explicitly samples from the distribution of interest (e.g., the choice of encodings and misspellings). For example, a privacy-oriented user would want you to be reasonably sure that the LLM couldn’t emit their private information, even with the presence of encoding or misspelling artifacts. Such a minor change in the test’s scope would result in dramatic changes to the underlying test implementation. To make matters worse, testing becomes even more difficult when the base pattern of interest is a combinatorial object, such as integers, dates, URL strings, and phone numbers—sets too large to enumerate.
+Example: Does GPT-2XL know George Washington’s birth date?
+To give a concrete example of false positives and false negatives, let’s consider a simple test of knowledge: Does the LLM know George Washington’s birth date? As shown in the figure below, we formulate this ‘test’ by asking the model to rank 4 choices. Such multiple-choice questions are common in today’s benchmark suites because they are simple to implement. However, 4 choices do not cover all birth dates; what if the model was lucky enough to eliminate the other 3 answers and just guess? That would be a false positive. As shown below, the correct date of February 22, 1732, is chosen by the model because it is the most likely; thus this test concludes the model does know the birth date.
+Multiple choice questions are prone to false positives because they can be arbitrarily easy. Solving this multiple choice can be accomplished by knowing George Washington was born before 1873. In this case, GPT-2XL assigns the highest likelihood to the correct answer.
+We can also try free response, as shown in in the following figure. However, the most likely reply is not a date and thus penalizes the model for being more general than the test task—a possible false negative. “this day in 1732” and “a farm” are reasonable completions for the fill-in-the-blank, yet an automated test system would mark them as not matching the solution set.
+Free response questions are prone to false negatives because the question’s and answer’s implicit constraints are not followed by the model. “this day in 1732” or “a farm” cannot match the reference answer because they do not follow a valid date format.
+A more natural alternative, and one that we explore via our work in ReLM (MLSys ’23), would be to only consider answers that follow a specific date-related format. The way we evaluate this query is by constraining generation to be of the form <Month> <Day>, <Year>, as if we had a “complete” multiple choice solution set, which is too large to enumerate. Because this pattern contains exactly all the solutions of interest, the test minimizes spurious conclusions due to false positives and false negatives. In doing so, we confirm a true negative—GPT-2XL believes George Washington was born on July 4, 1732. That’s of course factually incorrect, but we didn’t trick ourselves into thinking the LLM knew the answer when it didn’t.
+A ReLM query using the anticipated date pattern as a decoding constraint. GPT-2XL incorrectly thinks that July 4, 1732, is the most likely date that George Washington was born on.
+While we don’t have the space to exactly write out how to run these queries in ReLM, you can rest assured that you’ll find the above example in our code.
+The Case for ReLM
+Regular expressions describe the regular languages and are a way of specifying text patterns. Many text-processing tools, such as grep, use regular expressions to locate patterns in text. At a high level, regular languages can describe patterns using the primitives of string literals, disjunction (“OR”), and repetitions. For the purpose of this blog, you can think of regular languages as allowing you to interpolate between a 4-way multiple choice (e.g., A OR B OR C OR D) and one with a combinatorial explosion of choices in a free-response (e.g., all strings of length \(N\)). At the implementation level, regular expressions can be expressed with an equivalent directed graph, called an automaton, that represents all sequences via the edge transitions in the graph.
+ReLM is a Regular Expression engine for Language Models. As shown below, ReLM is an automaton-based constrained decoding system on top of the LLM. Users of ReLM construct queries that encompass the test pattern and how to execute it. Because the user explicitly describes the pattern of interest, ReLM can avoid doing extra work that results in false negatives. Additionally, since the user describes variations of the pattern (e.g., encodings and misspellings), ReLM can cover often-ignored elements in the test set, avoiding false positives. We can essentially describe any pattern or mutation of the pattern as long as the effects can be correctly propagated to the final automaton. Thankfully, there is a rich theory on ways to perform operations on automata (e.g., including misspellings and rewrites), which we utilize when compiling the final automaton. Thus, the user can 1) exactly specify large sets of interest and 2) cover the tokenization artifacts mentioned in the introduction.
+ReLM workflow with the query “The ((cat)|(dog))”. A regular expression query is compiled into an automaton, which is transformed into the LLM-specific set of token sequences representing the query. The query specifies alternative encodings and misspellings considered for the sampling distribution (not used here). Note that “Ġ” represents a space.
+Since the same query pattern can be used for many execution parameters, a single test encoded as a regular expression can lead to a variety of analyses. For example, the query in the above figure could be modified to include all misspellings of the base pattern as well as all the encodings. Additionally, the user can choose between sampling from the test set or finding the most likely sequence in it. Our paper’s results exploring queries surrounding memorization (extracting URLs), gender bias (measuring distributional bias in professions), toxicity (extracting offensive words), and language understanding (completing the correct answer) show that ReLM achieves up to \(15\times\) higher system efficiency in extracting memorized URLs, \(2.5\times\) data efficiency in extracting offensive content, and increased statistical and prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+Our results indicate that subtle differences in query specification can yield dramatically different results. For example, we find that randomly sampling from a URL prefix “https://www.” tends to generate invalid or duplicated URLs. ReLM avoids such inefficiency by returning strings matching the valid URL pattern sorted by likelihood. Likewise, searching over the space of all encodings as well as misspellings enables the \(2.5\times\) data efficiency in extracting toxic content from the LLM and results in different results on the gender bias task. Finally, we can recover prompt tuning behavior on the LAMBADA dataset by modifying the regular expression pattern, demonstrating that even language understanding tasks can benefit from such pattern specification.
+Conclusion
+In this blog, we outlined why it’s important to think of LLM tests in terms of patterns rather than individual sequences. Our work introduces ReLM, a Regular Expression engine for Language Models, to enable test writers to easily write LLM tests that can be described via pattern matching. If you’re interested in learning more about ReLM and how it can reduce the burden of LLM validation, please check out our paper (MLSys ’23) as well as our open-source code.
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of CMU.
+
+
+
+
+
+♥101
+ 5445
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+
+ Navigating to Objects in the Real World
+
+You Might Also Like
+
+
+
+Using Deep Learning to Help Us Understand Language Processing in the Brain
+May 31, 2019
+
+
+
+Policy Certificates and Minimax-Optimal PAC Bounds for Episodic Reinforcement Learning
+August 16, 2019
+
+
+
+Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+June 12, 2020
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+
+
+
+machine learning Research
+Validating Large Language Models with ReLM
+
+
+Authors
+Michael Kuchnik 
+
+
+Affiliations
+
+
+Published
+                        June 5, 2023                    
+
+DOI
+
+
+
+
+
+
+
+ReLM enables writing tests that are guaranteed to come from the set of valid strings, such as dates. Without ReLM, LLMs are free to complete prompts with non-date answers, which are difficult to assess.
+
+TL;DR: While large language models (LLMs) have been touted for their ability to generate natural-sounding text, there are concerns around potential negative effects of LLMs such as data memorization, bias, and inappropriate language. We introduce ReLM (MLSys ’23), a system for validating and querying LLMs using standard regular expressions. We demonstrate via validation tasks on memorization, bias, toxicity, and language understanding that ReLM achieves up to \(15\times\) higher system efficiency, \(2.5\times\) data efficiency, and increased prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+The Winners and Losers in Sequence Prediction
+Consider playing a video game (perhaps in your youth). You randomly enter the following sequence in your controller:
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️
+Suddenly, your character becomes invincible. You’ve discovered the “secret” sequence that the game developer used for testing the levels. After this point in time, everything you do is trivial—the game is over, you win.
+I claim that using large language models (LLMs) to generate text content is similar to playing a game with such secret sequences. Rather than getting surprised to see a change in game state, users of LLMs may be surprised to see a response that is not quite right. It’s possible the LLM violates someone’s privacy, encodes a stereotype, contains explicit material, or hallucinates an event. However, unlike the game, it may be difficult to even reason about how that sequence manifested.
+LLMs operate over tokens (i.e., integers), which are translated via the tokenizer to text. For encoding systems such as Byte-Pair Encoding (BPE), each token maps to 1+ characters. Using the controller analogy, an LLM is a controller having 50000+ “buttons”, and certain buttons operate as “macros” over the string space. For example, ⇑ could represent ⬆️⬆️ and ⇓could represent ⬇️⬇️, enabling the same code to be represented with ⇑⇓⬅️➡️⬅️➡️🅱️🅰️. Importantly, the LLM is unaware of this equivalence mapping—a single edit changing ⬆️⬆️ to ⬆️⬇️ would invalidate ⇑ being substituted into the sequence. Writing “the” instead of “The” could result in a different response from the LLM, even though the difference is stylistic to humans. These tokenization artifacts combined with potential shortcomings in the LLM’s internal reasoning create a minefield of unassuming LLM “bugs”.
+The possibility that a model may deviate from the “correct” set of sequences motivates LLM validation—the task of evaluating a model’s behavior among many axes so that shortcomings can be identified and addressed. The problem can be much worse than our game example—when we expect a single sequence, nearly all sequences are incorrect, a process that exponentially diverges as a function of the sequence length. Intuitively, it gets much harder to output the right sequence when the sequence length grows—correctly “dancing” ⬆️⬆️⬇️⬇️ is easier than ⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️.  In the lab, it’s hard to notice the consequences of generating an incorrect sequence, but as society embraces LLMs for more serious tasks (e.g., writing emails, filing taxes), we’ll want to have more confidence that they work as intended.
+Short of formal verification, the best validation mechanism we have is to build comprehensive test suites for characterizing model behavior over a set of input sequences. Benchmarking efforts such as HeLM are continuing to increase the scope of LLM validation by providing a gamut of test sequences. While I strongly agree with the motivation, I ask: Should we be rethinking how tests themselves are written? Can we systematically generalize sequences to high-level patterns such that test writers don’t have to reason about all the peculiar LLM implementation details that we just discussed?
+Background: Prompting LLMs
+With game codes, the code is entered through the controller. The result, on the other hand, is reflected in the game state (i.e., your character becomes invincible, which I represent with a good outcome ✓). But how does this analogy hold for LLMs?
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️⇒✓
+For autoregressive LLMs, typically the input is a sequence and the output is a sequence, and both of these are in the same space (e.g., strings of human language). For example, prompting the model with the word “The” would perhaps be followed by “ cat” in the sense that it is either likely or simply possible according to the LLM and the sampling procedure.
+Ⓣⓗⓔ⇒ ⓒⓐⓣ
+If “ cat” is considered a good answer, then we “won” the sequence lottery (represented by ✓). If the sequence is considered a bad answer e.g., the misspelling ” kAt”, then we lost (represented by ✗).
+Ⓣⓗⓔ ⓒⓐⓣ⇒✓
+Ⓣⓗⓔ ⓚⒶⓣ⇒✗
+Keep in mind that the token-level encoding is not unique for a given string sequence, so the above LLM examples will have many representations. The number of representations compounds with the size of the reference strings e.g., all the possible misspellings of ” cat”. Furthermore, the LLM will output a distribution over good and bad sequences, so we’d like to summarize them e.g., by measuring what percentage of sequences are good.
+Problem: Testing LLMs
+As test designers, our goal is to quantitatively measure some aspect of the LLM’s behavior. As we are studying a general notion of tests, we’ll introduce a small amount of formalism to argue our points. Let us call a test, \(T\), which takes a model, \(M\), and returns a boolean represented with 0 (bad answer) or 1 (good answer).
+$$T: M → \{0, 1\}$$
+For classification tasks, \(T\) represents whether the model, \(M\), classified a particular example correctly; the average of these tests is reported with test accuracy. Since correct classification boils down to the predicted class (\(y_\text{pred}:=M(x)\)) matching the ground-truth class (\(y\)), this test can be implemented in one line of code.
+y_pred == y 
+What does \(T\) look like for LLMs? Let’s say we want to test if “The” is followed by “ cat”. Constructing such a test is straightforward, because we can just check if the statement is true. We can imagine \(x\) representing “The” and \(y\) representing “ cat”. If \(y\) is sampled from some distribution (i.e., it’s a random variable), we can get many samples to compute the mean score. Depending on the application, we may or may not be interested in including all the encodings discussed previously as well as possible variations of the base pattern e.g., misspellings.
+Because of the potentially massive number of sequences involved in a test, LLM tests are both more difficult to express and evaluate, leading to tests with insufficient coverage. For example, if we happened to miss some prompt that does lead to “ cat”, our test had a false negative—it concluded it was not possible when it actually was. If we were to check if “ cat” is the most likely string following “The”, we may get false positives in the omitted cases where “ kAt” was more likely. The test designer must carefully consider trading off such sources of error with the implementation and execution complexity of the test.
+With traditional string-level APIs, it’s difficult to make testing trade-offs without rewriting the testing logic altogether—one has to write testing code that explicitly samples from the distribution of interest (e.g., the choice of encodings and misspellings). For example, a privacy-oriented user would want you to be reasonably sure that the LLM couldn’t emit their private information, even with the presence of encoding or misspelling artifacts. Such a minor change in the test’s scope would result in dramatic changes to the underlying test implementation. To make matters worse, testing becomes even more difficult when the base pattern of interest is a combinatorial object, such as integers, dates, URL strings, and phone numbers—sets too large to enumerate.
+Example: Does GPT-2XL know George Washington’s birth date?
+To give a concrete example of false positives and false negatives, let’s consider a simple test of knowledge: Does the LLM know George Washington’s birth date? As shown in the figure below, we formulate this ‘test’ by asking the model to rank 4 choices. Such multiple-choice questions are common in today’s benchmark suites because they are simple to implement. However, 4 choices do not cover all birth dates; what if the model was lucky enough to eliminate the other 3 answers and just guess? That would be a false positive. As shown below, the correct date of February 22, 1732, is chosen by the model because it is the most likely; thus this test concludes the model does know the birth date.
+Multiple choice questions are prone to false positives because they can be arbitrarily easy. Solving this multiple choice can be accomplished by knowing George Washington was born before 1873. In this case, GPT-2XL assigns the highest likelihood to the correct answer.
+We can also try free response, as shown in in the following figure. However, the most likely reply is not a date and thus penalizes the model for being more general than the test task—a possible false negative. “this day in 1732” and “a farm” are reasonable completions for the fill-in-the-blank, yet an automated test system would mark them as not matching the solution set.
+Free response questions are prone to false negatives because the question’s and answer’s implicit constraints are not followed by the model. “this day in 1732” or “a farm” cannot match the reference answer because they do not follow a valid date format.
+A more natural alternative, and one that we explore via our work in ReLM (MLSys ’23), would be to only consider answers that follow a specific date-related format. The way we evaluate this query is by constraining generation to be of the form <Month> <Day>, <Year>, as if we had a “complete” multiple choice solution set, which is too large to enumerate. Because this pattern contains exactly all the solutions of interest, the test minimizes spurious conclusions due to false positives and false negatives. In doing so, we confirm a true negative—GPT-2XL believes George Washington was born on July 4, 1732. That’s of course factually incorrect, but we didn’t trick ourselves into thinking the LLM knew the answer when it didn’t.
+A ReLM query using the anticipated date pattern as a decoding constraint. GPT-2XL incorrectly thinks that July 4, 1732, is the most likely date that George Washington was born on.
+While we don’t have the space to exactly write out how to run these queries in ReLM, you can rest assured that you’ll find the above example in our code.
+The Case for ReLM
+Regular expressions describe the regular languages and are a way of specifying text patterns. Many text-processing tools, such as grep, use regular expressions to locate patterns in text. At a high level, regular languages can describe patterns using the primitives of string literals, disjunction (“OR”), and repetitions. For the purpose of this blog, you can think of regular languages as allowing you to interpolate between a 4-way multiple choice (e.g., A OR B OR C OR D) and one with a combinatorial explosion of choices in a free-response (e.g., all strings of length \(N\)). At the implementation level, regular expressions can be expressed with an equivalent directed graph, called an automaton, that represents all sequences via the edge transitions in the graph.
+ReLM is a Regular Expression engine for Language Models. As shown below, ReLM is an automaton-based constrained decoding system on top of the LLM. Users of ReLM construct queries that encompass the test pattern and how to execute it. Because the user explicitly describes the pattern of interest, ReLM can avoid doing extra work that results in false negatives. Additionally, since the user describes variations of the pattern (e.g., encodings and misspellings), ReLM can cover often-ignored elements in the test set, avoiding false positives. We can essentially describe any pattern or mutation of the pattern as long as the effects can be correctly propagated to the final automaton. Thankfully, there is a rich theory on ways to perform operations on automata (e.g., including misspellings and rewrites), which we utilize when compiling the final automaton. Thus, the user can 1) exactly specify large sets of interest and 2) cover the tokenization artifacts mentioned in the introduction.
+ReLM workflow with the query “The ((cat)|(dog))”. A regular expression query is compiled into an automaton, which is transformed into the LLM-specific set of token sequences representing the query. The query specifies alternative encodings and misspellings considered for the sampling distribution (not used here). Note that “Ġ” represents a space.
+Since the same query pattern can be used for many execution parameters, a single test encoded as a regular expression can lead to a variety of analyses. For example, the query in the above figure could be modified to include all misspellings of the base pattern as well as all the encodings. Additionally, the user can choose between sampling from the test set or finding the most likely sequence in it. Our paper’s results exploring queries surrounding memorization (extracting URLs), gender bias (measuring distributional bias in professions), toxicity (extracting offensive words), and language understanding (completing the correct answer) show that ReLM achieves up to \(15\times\) higher system efficiency in extracting memorized URLs, \(2.5\times\) data efficiency in extracting offensive content, and increased statistical and prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+Our results indicate that subtle differences in query specification can yield dramatically different results. For example, we find that randomly sampling from a URL prefix “https://www.” tends to generate invalid or duplicated URLs. ReLM avoids such inefficiency by returning strings matching the valid URL pattern sorted by likelihood. Likewise, searching over the space of all encodings as well as misspellings enables the \(2.5\times\) data efficiency in extracting toxic content from the LLM and results in different results on the gender bias task. Finally, we can recover prompt tuning behavior on the LAMBADA dataset by modifying the regular expression pattern, demonstrating that even language understanding tasks can benefit from such pattern specification.
+Conclusion
+In this blog, we outlined why it’s important to think of LLM tests in terms of patterns rather than individual sequences. Our work introduces ReLM, a Regular Expression engine for Language Models, to enable test writers to easily write LLM tests that can be described via pattern matching. If you’re interested in learning more about ReLM and how it can reduce the burden of LLM validation, please check out our paper (MLSys ’23) as well as our open-source code.
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of CMU.
+
+
+
+
+
+♥101
+ 5445
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+
+ Navigating to Objects in the Real World
+
+You Might Also Like
+
+
+
+Using Deep Learning to Help Us Understand Language Processing in the Brain
+May 31, 2019
+
+
+
+Policy Certificates and Minimax-Optimal PAC Bounds for Episodic Reinforcement Learning
+August 16, 2019
+
+
+
+Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+June 12, 2020
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+
+machine learning Research
+Validating Large Language Models with ReLM
+
+
+Authors
+Michael Kuchnik 
+
+
+Affiliations
+
+
+Published
+                        June 5, 2023                    
+
+DOI
+
+
+
+
+
+
+
+ReLM enables writing tests that are guaranteed to come from the set of valid strings, such as dates. Without ReLM, LLMs are free to complete prompts with non-date answers, which are difficult to assess.
+
+TL;DR: While large language models (LLMs) have been touted for their ability to generate natural-sounding text, there are concerns around potential negative effects of LLMs such as data memorization, bias, and inappropriate language. We introduce ReLM (MLSys ’23), a system for validating and querying LLMs using standard regular expressions. We demonstrate via validation tasks on memorization, bias, toxicity, and language understanding that ReLM achieves up to \(15\times\) higher system efficiency, \(2.5\times\) data efficiency, and increased prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+The Winners and Losers in Sequence Prediction
+Consider playing a video game (perhaps in your youth). You randomly enter the following sequence in your controller:
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️
+Suddenly, your character becomes invincible. You’ve discovered the “secret” sequence that the game developer used for testing the levels. After this point in time, everything you do is trivial—the game is over, you win.
+I claim that using large language models (LLMs) to generate text content is similar to playing a game with such secret sequences. Rather than getting surprised to see a change in game state, users of LLMs may be surprised to see a response that is not quite right. It’s possible the LLM violates someone’s privacy, encodes a stereotype, contains explicit material, or hallucinates an event. However, unlike the game, it may be difficult to even reason about how that sequence manifested.
+LLMs operate over tokens (i.e., integers), which are translated via the tokenizer to text. For encoding systems such as Byte-Pair Encoding (BPE), each token maps to 1+ characters. Using the controller analogy, an LLM is a controller having 50000+ “buttons”, and certain buttons operate as “macros” over the string space. For example, ⇑ could represent ⬆️⬆️ and ⇓could represent ⬇️⬇️, enabling the same code to be represented with ⇑⇓⬅️➡️⬅️➡️🅱️🅰️. Importantly, the LLM is unaware of this equivalence mapping—a single edit changing ⬆️⬆️ to ⬆️⬇️ would invalidate ⇑ being substituted into the sequence. Writing “the” instead of “The” could result in a different response from the LLM, even though the difference is stylistic to humans. These tokenization artifacts combined with potential shortcomings in the LLM’s internal reasoning create a minefield of unassuming LLM “bugs”.
+The possibility that a model may deviate from the “correct” set of sequences motivates LLM validation—the task of evaluating a model’s behavior among many axes so that shortcomings can be identified and addressed. The problem can be much worse than our game example—when we expect a single sequence, nearly all sequences are incorrect, a process that exponentially diverges as a function of the sequence length. Intuitively, it gets much harder to output the right sequence when the sequence length grows—correctly “dancing” ⬆️⬆️⬇️⬇️ is easier than ⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️.  In the lab, it’s hard to notice the consequences of generating an incorrect sequence, but as society embraces LLMs for more serious tasks (e.g., writing emails, filing taxes), we’ll want to have more confidence that they work as intended.
+Short of formal verification, the best validation mechanism we have is to build comprehensive test suites for characterizing model behavior over a set of input sequences. Benchmarking efforts such as HeLM are continuing to increase the scope of LLM validation by providing a gamut of test sequences. While I strongly agree with the motivation, I ask: Should we be rethinking how tests themselves are written? Can we systematically generalize sequences to high-level patterns such that test writers don’t have to reason about all the peculiar LLM implementation details that we just discussed?
+Background: Prompting LLMs
+With game codes, the code is entered through the controller. The result, on the other hand, is reflected in the game state (i.e., your character becomes invincible, which I represent with a good outcome ✓). But how does this analogy hold for LLMs?
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️⇒✓
+For autoregressive LLMs, typically the input is a sequence and the output is a sequence, and both of these are in the same space (e.g., strings of human language). For example, prompting the model with the word “The” would perhaps be followed by “ cat” in the sense that it is either likely or simply possible according to the LLM and the sampling procedure.
+Ⓣⓗⓔ⇒ ⓒⓐⓣ
+If “ cat” is considered a good answer, then we “won” the sequence lottery (represented by ✓). If the sequence is considered a bad answer e.g., the misspelling ” kAt”, then we lost (represented by ✗).
+Ⓣⓗⓔ ⓒⓐⓣ⇒✓
+Ⓣⓗⓔ ⓚⒶⓣ⇒✗
+Keep in mind that the token-level encoding is not unique for a given string sequence, so the above LLM examples will have many representations. The number of representations compounds with the size of the reference strings e.g., all the possible misspellings of ” cat”. Furthermore, the LLM will output a distribution over good and bad sequences, so we’d like to summarize them e.g., by measuring what percentage of sequences are good.
+Problem: Testing LLMs
+As test designers, our goal is to quantitatively measure some aspect of the LLM’s behavior. As we are studying a general notion of tests, we’ll introduce a small amount of formalism to argue our points. Let us call a test, \(T\), which takes a model, \(M\), and returns a boolean represented with 0 (bad answer) or 1 (good answer).
+$$T: M → \{0, 1\}$$
+For classification tasks, \(T\) represents whether the model, \(M\), classified a particular example correctly; the average of these tests is reported with test accuracy. Since correct classification boils down to the predicted class (\(y_\text{pred}:=M(x)\)) matching the ground-truth class (\(y\)), this test can be implemented in one line of code.
+y_pred == y 
+What does \(T\) look like for LLMs? Let’s say we want to test if “The” is followed by “ cat”. Constructing such a test is straightforward, because we can just check if the statement is true. We can imagine \(x\) representing “The” and \(y\) representing “ cat”. If \(y\) is sampled from some distribution (i.e., it’s a random variable), we can get many samples to compute the mean score. Depending on the application, we may or may not be interested in including all the encodings discussed previously as well as possible variations of the base pattern e.g., misspellings.
+Because of the potentially massive number of sequences involved in a test, LLM tests are both more difficult to express and evaluate, leading to tests with insufficient coverage. For example, if we happened to miss some prompt that does lead to “ cat”, our test had a false negative—it concluded it was not possible when it actually was. If we were to check if “ cat” is the most likely string following “The”, we may get false positives in the omitted cases where “ kAt” was more likely. The test designer must carefully consider trading off such sources of error with the implementation and execution complexity of the test.
+With traditional string-level APIs, it’s difficult to make testing trade-offs without rewriting the testing logic altogether—one has to write testing code that explicitly samples from the distribution of interest (e.g., the choice of encodings and misspellings). For example, a privacy-oriented user would want you to be reasonably sure that the LLM couldn’t emit their private information, even with the presence of encoding or misspelling artifacts. Such a minor change in the test’s scope would result in dramatic changes to the underlying test implementation. To make matters worse, testing becomes even more difficult when the base pattern of interest is a combinatorial object, such as integers, dates, URL strings, and phone numbers—sets too large to enumerate.
+Example: Does GPT-2XL know George Washington’s birth date?
+To give a concrete example of false positives and false negatives, let’s consider a simple test of knowledge: Does the LLM know George Washington’s birth date? As shown in the figure below, we formulate this ‘test’ by asking the model to rank 4 choices. Such multiple-choice questions are common in today’s benchmark suites because they are simple to implement. However, 4 choices do not cover all birth dates; what if the model was lucky enough to eliminate the other 3 answers and just guess? That would be a false positive. As shown below, the correct date of February 22, 1732, is chosen by the model because it is the most likely; thus this test concludes the model does know the birth date.
+Multiple choice questions are prone to false positives because they can be arbitrarily easy. Solving this multiple choice can be accomplished by knowing George Washington was born before 1873. In this case, GPT-2XL assigns the highest likelihood to the correct answer.
+We can also try free response, as shown in in the following figure. However, the most likely reply is not a date and thus penalizes the model for being more general than the test task—a possible false negative. “this day in 1732” and “a farm” are reasonable completions for the fill-in-the-blank, yet an automated test system would mark them as not matching the solution set.
+Free response questions are prone to false negatives because the question’s and answer’s implicit constraints are not followed by the model. “this day in 1732” or “a farm” cannot match the reference answer because they do not follow a valid date format.
+A more natural alternative, and one that we explore via our work in ReLM (MLSys ’23), would be to only consider answers that follow a specific date-related format. The way we evaluate this query is by constraining generation to be of the form <Month> <Day>, <Year>, as if we had a “complete” multiple choice solution set, which is too large to enumerate. Because this pattern contains exactly all the solutions of interest, the test minimizes spurious conclusions due to false positives and false negatives. In doing so, we confirm a true negative—GPT-2XL believes George Washington was born on July 4, 1732. That’s of course factually incorrect, but we didn’t trick ourselves into thinking the LLM knew the answer when it didn’t.
+A ReLM query using the anticipated date pattern as a decoding constraint. GPT-2XL incorrectly thinks that July 4, 1732, is the most likely date that George Washington was born on.
+While we don’t have the space to exactly write out how to run these queries in ReLM, you can rest assured that you’ll find the above example in our code.
+The Case for ReLM
+Regular expressions describe the regular languages and are a way of specifying text patterns. Many text-processing tools, such as grep, use regular expressions to locate patterns in text. At a high level, regular languages can describe patterns using the primitives of string literals, disjunction (“OR”), and repetitions. For the purpose of this blog, you can think of regular languages as allowing you to interpolate between a 4-way multiple choice (e.g., A OR B OR C OR D) and one with a combinatorial explosion of choices in a free-response (e.g., all strings of length \(N\)). At the implementation level, regular expressions can be expressed with an equivalent directed graph, called an automaton, that represents all sequences via the edge transitions in the graph.
+ReLM is a Regular Expression engine for Language Models. As shown below, ReLM is an automaton-based constrained decoding system on top of the LLM. Users of ReLM construct queries that encompass the test pattern and how to execute it. Because the user explicitly describes the pattern of interest, ReLM can avoid doing extra work that results in false negatives. Additionally, since the user describes variations of the pattern (e.g., encodings and misspellings), ReLM can cover often-ignored elements in the test set, avoiding false positives. We can essentially describe any pattern or mutation of the pattern as long as the effects can be correctly propagated to the final automaton. Thankfully, there is a rich theory on ways to perform operations on automata (e.g., including misspellings and rewrites), which we utilize when compiling the final automaton. Thus, the user can 1) exactly specify large sets of interest and 2) cover the tokenization artifacts mentioned in the introduction.
+ReLM workflow with the query “The ((cat)|(dog))”. A regular expression query is compiled into an automaton, which is transformed into the LLM-specific set of token sequences representing the query. The query specifies alternative encodings and misspellings considered for the sampling distribution (not used here). Note that “Ġ” represents a space.
+Since the same query pattern can be used for many execution parameters, a single test encoded as a regular expression can lead to a variety of analyses. For example, the query in the above figure could be modified to include all misspellings of the base pattern as well as all the encodings. Additionally, the user can choose between sampling from the test set or finding the most likely sequence in it. Our paper’s results exploring queries surrounding memorization (extracting URLs), gender bias (measuring distributional bias in professions), toxicity (extracting offensive words), and language understanding (completing the correct answer) show that ReLM achieves up to \(15\times\) higher system efficiency in extracting memorized URLs, \(2.5\times\) data efficiency in extracting offensive content, and increased statistical and prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+Our results indicate that subtle differences in query specification can yield dramatically different results. For example, we find that randomly sampling from a URL prefix “https://www.” tends to generate invalid or duplicated URLs. ReLM avoids such inefficiency by returning strings matching the valid URL pattern sorted by likelihood. Likewise, searching over the space of all encodings as well as misspellings enables the \(2.5\times\) data efficiency in extracting toxic content from the LLM and results in different results on the gender bias task. Finally, we can recover prompt tuning behavior on the LAMBADA dataset by modifying the regular expression pattern, demonstrating that even language understanding tasks can benefit from such pattern specification.
+Conclusion
+In this blog, we outlined why it’s important to think of LLM tests in terms of patterns rather than individual sequences. Our work introduces ReLM, a Regular Expression engine for Language Models, to enable test writers to easily write LLM tests that can be described via pattern matching. If you’re interested in learning more about ReLM and how it can reduce the burden of LLM validation, please check out our paper (MLSys ’23) as well as our open-source code.
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of CMU.
+
+
+
+
+
+♥101
+ 5445
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+
+ Navigating to Objects in the Real World
+
+You Might Also Like
+
+
+
+Using Deep Learning to Help Us Understand Language Processing in the Brain
+May 31, 2019
+
+
+
+Policy Certificates and Minimax-Optimal PAC Bounds for Episodic Reinforcement Learning
+August 16, 2019
+
+
+
+Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+June 12, 2020
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+machine learning Research
+Validating Large Language Models with ReLM
+
+
+Authors
+Michael Kuchnik 
+
+
+Affiliations
+
+
+Published
+                        June 5, 2023                    
+
+DOI
+
+
+
+
+
+
+
+ReLM enables writing tests that are guaranteed to come from the set of valid strings, such as dates. Without ReLM, LLMs are free to complete prompts with non-date answers, which are difficult to assess.
+
+TL;DR: While large language models (LLMs) have been touted for their ability to generate natural-sounding text, there are concerns around potential negative effects of LLMs such as data memorization, bias, and inappropriate language. We introduce ReLM (MLSys ’23), a system for validating and querying LLMs using standard regular expressions. We demonstrate via validation tasks on memorization, bias, toxicity, and language understanding that ReLM achieves up to \(15\times\) higher system efficiency, \(2.5\times\) data efficiency, and increased prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+The Winners and Losers in Sequence Prediction
+Consider playing a video game (perhaps in your youth). You randomly enter the following sequence in your controller:
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️
+Suddenly, your character becomes invincible. You’ve discovered the “secret” sequence that the game developer used for testing the levels. After this point in time, everything you do is trivial—the game is over, you win.
+I claim that using large language models (LLMs) to generate text content is similar to playing a game with such secret sequences. Rather than getting surprised to see a change in game state, users of LLMs may be surprised to see a response that is not quite right. It’s possible the LLM violates someone’s privacy, encodes a stereotype, contains explicit material, or hallucinates an event. However, unlike the game, it may be difficult to even reason about how that sequence manifested.
+LLMs operate over tokens (i.e., integers), which are translated via the tokenizer to text. For encoding systems such as Byte-Pair Encoding (BPE), each token maps to 1+ characters. Using the controller analogy, an LLM is a controller having 50000+ “buttons”, and certain buttons operate as “macros” over the string space. For example, ⇑ could represent ⬆️⬆️ and ⇓could represent ⬇️⬇️, enabling the same code to be represented with ⇑⇓⬅️➡️⬅️➡️🅱️🅰️. Importantly, the LLM is unaware of this equivalence mapping—a single edit changing ⬆️⬆️ to ⬆️⬇️ would invalidate ⇑ being substituted into the sequence. Writing “the” instead of “The” could result in a different response from the LLM, even though the difference is stylistic to humans. These tokenization artifacts combined with potential shortcomings in the LLM’s internal reasoning create a minefield of unassuming LLM “bugs”.
+The possibility that a model may deviate from the “correct” set of sequences motivates LLM validation—the task of evaluating a model’s behavior among many axes so that shortcomings can be identified and addressed. The problem can be much worse than our game example—when we expect a single sequence, nearly all sequences are incorrect, a process that exponentially diverges as a function of the sequence length. Intuitively, it gets much harder to output the right sequence when the sequence length grows—correctly “dancing” ⬆️⬆️⬇️⬇️ is easier than ⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️.  In the lab, it’s hard to notice the consequences of generating an incorrect sequence, but as society embraces LLMs for more serious tasks (e.g., writing emails, filing taxes), we’ll want to have more confidence that they work as intended.
+Short of formal verification, the best validation mechanism we have is to build comprehensive test suites for characterizing model behavior over a set of input sequences. Benchmarking efforts such as HeLM are continuing to increase the scope of LLM validation by providing a gamut of test sequences. While I strongly agree with the motivation, I ask: Should we be rethinking how tests themselves are written? Can we systematically generalize sequences to high-level patterns such that test writers don’t have to reason about all the peculiar LLM implementation details that we just discussed?
+Background: Prompting LLMs
+With game codes, the code is entered through the controller. The result, on the other hand, is reflected in the game state (i.e., your character becomes invincible, which I represent with a good outcome ✓). But how does this analogy hold for LLMs?
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️⇒✓
+For autoregressive LLMs, typically the input is a sequence and the output is a sequence, and both of these are in the same space (e.g., strings of human language). For example, prompting the model with the word “The” would perhaps be followed by “ cat” in the sense that it is either likely or simply possible according to the LLM and the sampling procedure.
+Ⓣⓗⓔ⇒ ⓒⓐⓣ
+If “ cat” is considered a good answer, then we “won” the sequence lottery (represented by ✓). If the sequence is considered a bad answer e.g., the misspelling ” kAt”, then we lost (represented by ✗).
+Ⓣⓗⓔ ⓒⓐⓣ⇒✓
+Ⓣⓗⓔ ⓚⒶⓣ⇒✗
+Keep in mind that the token-level encoding is not unique for a given string sequence, so the above LLM examples will have many representations. The number of representations compounds with the size of the reference strings e.g., all the possible misspellings of ” cat”. Furthermore, the LLM will output a distribution over good and bad sequences, so we’d like to summarize them e.g., by measuring what percentage of sequences are good.
+Problem: Testing LLMs
+As test designers, our goal is to quantitatively measure some aspect of the LLM’s behavior. As we are studying a general notion of tests, we’ll introduce a small amount of formalism to argue our points. Let us call a test, \(T\), which takes a model, \(M\), and returns a boolean represented with 0 (bad answer) or 1 (good answer).
+$$T: M → \{0, 1\}$$
+For classification tasks, \(T\) represents whether the model, \(M\), classified a particular example correctly; the average of these tests is reported with test accuracy. Since correct classification boils down to the predicted class (\(y_\text{pred}:=M(x)\)) matching the ground-truth class (\(y\)), this test can be implemented in one line of code.
+y_pred == y 
+What does \(T\) look like for LLMs? Let’s say we want to test if “The” is followed by “ cat”. Constructing such a test is straightforward, because we can just check if the statement is true. We can imagine \(x\) representing “The” and \(y\) representing “ cat”. If \(y\) is sampled from some distribution (i.e., it’s a random variable), we can get many samples to compute the mean score. Depending on the application, we may or may not be interested in including all the encodings discussed previously as well as possible variations of the base pattern e.g., misspellings.
+Because of the potentially massive number of sequences involved in a test, LLM tests are both more difficult to express and evaluate, leading to tests with insufficient coverage. For example, if we happened to miss some prompt that does lead to “ cat”, our test had a false negative—it concluded it was not possible when it actually was. If we were to check if “ cat” is the most likely string following “The”, we may get false positives in the omitted cases where “ kAt” was more likely. The test designer must carefully consider trading off such sources of error with the implementation and execution complexity of the test.
+With traditional string-level APIs, it’s difficult to make testing trade-offs without rewriting the testing logic altogether—one has to write testing code that explicitly samples from the distribution of interest (e.g., the choice of encodings and misspellings). For example, a privacy-oriented user would want you to be reasonably sure that the LLM couldn’t emit their private information, even with the presence of encoding or misspelling artifacts. Such a minor change in the test’s scope would result in dramatic changes to the underlying test implementation. To make matters worse, testing becomes even more difficult when the base pattern of interest is a combinatorial object, such as integers, dates, URL strings, and phone numbers—sets too large to enumerate.
+Example: Does GPT-2XL know George Washington’s birth date?
+To give a concrete example of false positives and false negatives, let’s consider a simple test of knowledge: Does the LLM know George Washington’s birth date? As shown in the figure below, we formulate this ‘test’ by asking the model to rank 4 choices. Such multiple-choice questions are common in today’s benchmark suites because they are simple to implement. However, 4 choices do not cover all birth dates; what if the model was lucky enough to eliminate the other 3 answers and just guess? That would be a false positive. As shown below, the correct date of February 22, 1732, is chosen by the model because it is the most likely; thus this test concludes the model does know the birth date.
+Multiple choice questions are prone to false positives because they can be arbitrarily easy. Solving this multiple choice can be accomplished by knowing George Washington was born before 1873. In this case, GPT-2XL assigns the highest likelihood to the correct answer.
+We can also try free response, as shown in in the following figure. However, the most likely reply is not a date and thus penalizes the model for being more general than the test task—a possible false negative. “this day in 1732” and “a farm” are reasonable completions for the fill-in-the-blank, yet an automated test system would mark them as not matching the solution set.
+Free response questions are prone to false negatives because the question’s and answer’s implicit constraints are not followed by the model. “this day in 1732” or “a farm” cannot match the reference answer because they do not follow a valid date format.
+A more natural alternative, and one that we explore via our work in ReLM (MLSys ’23), would be to only consider answers that follow a specific date-related format. The way we evaluate this query is by constraining generation to be of the form <Month> <Day>, <Year>, as if we had a “complete” multiple choice solution set, which is too large to enumerate. Because this pattern contains exactly all the solutions of interest, the test minimizes spurious conclusions due to false positives and false negatives. In doing so, we confirm a true negative—GPT-2XL believes George Washington was born on July 4, 1732. That’s of course factually incorrect, but we didn’t trick ourselves into thinking the LLM knew the answer when it didn’t.
+A ReLM query using the anticipated date pattern as a decoding constraint. GPT-2XL incorrectly thinks that July 4, 1732, is the most likely date that George Washington was born on.
+While we don’t have the space to exactly write out how to run these queries in ReLM, you can rest assured that you’ll find the above example in our code.
+The Case for ReLM
+Regular expressions describe the regular languages and are a way of specifying text patterns. Many text-processing tools, such as grep, use regular expressions to locate patterns in text. At a high level, regular languages can describe patterns using the primitives of string literals, disjunction (“OR”), and repetitions. For the purpose of this blog, you can think of regular languages as allowing you to interpolate between a 4-way multiple choice (e.g., A OR B OR C OR D) and one with a combinatorial explosion of choices in a free-response (e.g., all strings of length \(N\)). At the implementation level, regular expressions can be expressed with an equivalent directed graph, called an automaton, that represents all sequences via the edge transitions in the graph.
+ReLM is a Regular Expression engine for Language Models. As shown below, ReLM is an automaton-based constrained decoding system on top of the LLM. Users of ReLM construct queries that encompass the test pattern and how to execute it. Because the user explicitly describes the pattern of interest, ReLM can avoid doing extra work that results in false negatives. Additionally, since the user describes variations of the pattern (e.g., encodings and misspellings), ReLM can cover often-ignored elements in the test set, avoiding false positives. We can essentially describe any pattern or mutation of the pattern as long as the effects can be correctly propagated to the final automaton. Thankfully, there is a rich theory on ways to perform operations on automata (e.g., including misspellings and rewrites), which we utilize when compiling the final automaton. Thus, the user can 1) exactly specify large sets of interest and 2) cover the tokenization artifacts mentioned in the introduction.
+ReLM workflow with the query “The ((cat)|(dog))”. A regular expression query is compiled into an automaton, which is transformed into the LLM-specific set of token sequences representing the query. The query specifies alternative encodings and misspellings considered for the sampling distribution (not used here). Note that “Ġ” represents a space.
+Since the same query pattern can be used for many execution parameters, a single test encoded as a regular expression can lead to a variety of analyses. For example, the query in the above figure could be modified to include all misspellings of the base pattern as well as all the encodings. Additionally, the user can choose between sampling from the test set or finding the most likely sequence in it. Our paper’s results exploring queries surrounding memorization (extracting URLs), gender bias (measuring distributional bias in professions), toxicity (extracting offensive words), and language understanding (completing the correct answer) show that ReLM achieves up to \(15\times\) higher system efficiency in extracting memorized URLs, \(2.5\times\) data efficiency in extracting offensive content, and increased statistical and prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+Our results indicate that subtle differences in query specification can yield dramatically different results. For example, we find that randomly sampling from a URL prefix “https://www.” tends to generate invalid or duplicated URLs. ReLM avoids such inefficiency by returning strings matching the valid URL pattern sorted by likelihood. Likewise, searching over the space of all encodings as well as misspellings enables the \(2.5\times\) data efficiency in extracting toxic content from the LLM and results in different results on the gender bias task. Finally, we can recover prompt tuning behavior on the LAMBADA dataset by modifying the regular expression pattern, demonstrating that even language understanding tasks can benefit from such pattern specification.
+Conclusion
+In this blog, we outlined why it’s important to think of LLM tests in terms of patterns rather than individual sequences. Our work introduces ReLM, a Regular Expression engine for Language Models, to enable test writers to easily write LLM tests that can be described via pattern matching. If you’re interested in learning more about ReLM and how it can reduce the burden of LLM validation, please check out our paper (MLSys ’23) as well as our open-source code.
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of CMU.
+
+
+
+
+
+♥101
+ 5445
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+
+ Navigating to Objects in the Real World
+
+You Might Also Like
+
+
+
+Using Deep Learning to Help Us Understand Language Processing in the Brain
+May 31, 2019
+
+
+
+Policy Certificates and Minimax-Optimal PAC Bounds for Episodic Reinforcement Learning
+August 16, 2019
+
+
+
+Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+June 12, 2020
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+machine learning Research
+Validating Large Language Models with ReLM
+
+
+Authors
+Michael Kuchnik 
+
+
+Affiliations
+
+
+Published
+                        June 5, 2023                    
+
+DOI
+
+
+
+
+
+
+
+ReLM enables writing tests that are guaranteed to come from the set of valid strings, such as dates. Without ReLM, LLMs are free to complete prompts with non-date answers, which are difficult to assess.
+
+TL;DR: While large language models (LLMs) have been touted for their ability to generate natural-sounding text, there are concerns around potential negative effects of LLMs such as data memorization, bias, and inappropriate language. We introduce ReLM (MLSys ’23), a system for validating and querying LLMs using standard regular expressions. We demonstrate via validation tasks on memorization, bias, toxicity, and language understanding that ReLM achieves up to \(15\times\) higher system efficiency, \(2.5\times\) data efficiency, and increased prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+The Winners and Losers in Sequence Prediction
+Consider playing a video game (perhaps in your youth). You randomly enter the following sequence in your controller:
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️
+Suddenly, your character becomes invincible. You’ve discovered the “secret” sequence that the game developer used for testing the levels. After this point in time, everything you do is trivial—the game is over, you win.
+I claim that using large language models (LLMs) to generate text content is similar to playing a game with such secret sequences. Rather than getting surprised to see a change in game state, users of LLMs may be surprised to see a response that is not quite right. It’s possible the LLM violates someone’s privacy, encodes a stereotype, contains explicit material, or hallucinates an event. However, unlike the game, it may be difficult to even reason about how that sequence manifested.
+LLMs operate over tokens (i.e., integers), which are translated via the tokenizer to text. For encoding systems such as Byte-Pair Encoding (BPE), each token maps to 1+ characters. Using the controller analogy, an LLM is a controller having 50000+ “buttons”, and certain buttons operate as “macros” over the string space. For example, ⇑ could represent ⬆️⬆️ and ⇓could represent ⬇️⬇️, enabling the same code to be represented with ⇑⇓⬅️➡️⬅️➡️🅱️🅰️. Importantly, the LLM is unaware of this equivalence mapping—a single edit changing ⬆️⬆️ to ⬆️⬇️ would invalidate ⇑ being substituted into the sequence. Writing “the” instead of “The” could result in a different response from the LLM, even though the difference is stylistic to humans. These tokenization artifacts combined with potential shortcomings in the LLM’s internal reasoning create a minefield of unassuming LLM “bugs”.
+The possibility that a model may deviate from the “correct” set of sequences motivates LLM validation—the task of evaluating a model’s behavior among many axes so that shortcomings can be identified and addressed. The problem can be much worse than our game example—when we expect a single sequence, nearly all sequences are incorrect, a process that exponentially diverges as a function of the sequence length. Intuitively, it gets much harder to output the right sequence when the sequence length grows—correctly “dancing” ⬆️⬆️⬇️⬇️ is easier than ⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️.  In the lab, it’s hard to notice the consequences of generating an incorrect sequence, but as society embraces LLMs for more serious tasks (e.g., writing emails, filing taxes), we’ll want to have more confidence that they work as intended.
+Short of formal verification, the best validation mechanism we have is to build comprehensive test suites for characterizing model behavior over a set of input sequences. Benchmarking efforts such as HeLM are continuing to increase the scope of LLM validation by providing a gamut of test sequences. While I strongly agree with the motivation, I ask: Should we be rethinking how tests themselves are written? Can we systematically generalize sequences to high-level patterns such that test writers don’t have to reason about all the peculiar LLM implementation details that we just discussed?
+Background: Prompting LLMs
+With game codes, the code is entered through the controller. The result, on the other hand, is reflected in the game state (i.e., your character becomes invincible, which I represent with a good outcome ✓). But how does this analogy hold for LLMs?
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️⇒✓
+For autoregressive LLMs, typically the input is a sequence and the output is a sequence, and both of these are in the same space (e.g., strings of human language). For example, prompting the model with the word “The” would perhaps be followed by “ cat” in the sense that it is either likely or simply possible according to the LLM and the sampling procedure.
+Ⓣⓗⓔ⇒ ⓒⓐⓣ
+If “ cat” is considered a good answer, then we “won” the sequence lottery (represented by ✓). If the sequence is considered a bad answer e.g., the misspelling ” kAt”, then we lost (represented by ✗).
+Ⓣⓗⓔ ⓒⓐⓣ⇒✓
+Ⓣⓗⓔ ⓚⒶⓣ⇒✗
+Keep in mind that the token-level encoding is not unique for a given string sequence, so the above LLM examples will have many representations. The number of representations compounds with the size of the reference strings e.g., all the possible misspellings of ” cat”. Furthermore, the LLM will output a distribution over good and bad sequences, so we’d like to summarize them e.g., by measuring what percentage of sequences are good.
+Problem: Testing LLMs
+As test designers, our goal is to quantitatively measure some aspect of the LLM’s behavior. As we are studying a general notion of tests, we’ll introduce a small amount of formalism to argue our points. Let us call a test, \(T\), which takes a model, \(M\), and returns a boolean represented with 0 (bad answer) or 1 (good answer).
+$$T: M → \{0, 1\}$$
+For classification tasks, \(T\) represents whether the model, \(M\), classified a particular example correctly; the average of these tests is reported with test accuracy. Since correct classification boils down to the predicted class (\(y_\text{pred}:=M(x)\)) matching the ground-truth class (\(y\)), this test can be implemented in one line of code.
+y_pred == y 
+What does \(T\) look like for LLMs? Let’s say we want to test if “The” is followed by “ cat”. Constructing such a test is straightforward, because we can just check if the statement is true. We can imagine \(x\) representing “The” and \(y\) representing “ cat”. If \(y\) is sampled from some distribution (i.e., it’s a random variable), we can get many samples to compute the mean score. Depending on the application, we may or may not be interested in including all the encodings discussed previously as well as possible variations of the base pattern e.g., misspellings.
+Because of the potentially massive number of sequences involved in a test, LLM tests are both more difficult to express and evaluate, leading to tests with insufficient coverage. For example, if we happened to miss some prompt that does lead to “ cat”, our test had a false negative—it concluded it was not possible when it actually was. If we were to check if “ cat” is the most likely string following “The”, we may get false positives in the omitted cases where “ kAt” was more likely. The test designer must carefully consider trading off such sources of error with the implementation and execution complexity of the test.
+With traditional string-level APIs, it’s difficult to make testing trade-offs without rewriting the testing logic altogether—one has to write testing code that explicitly samples from the distribution of interest (e.g., the choice of encodings and misspellings). For example, a privacy-oriented user would want you to be reasonably sure that the LLM couldn’t emit their private information, even with the presence of encoding or misspelling artifacts. Such a minor change in the test’s scope would result in dramatic changes to the underlying test implementation. To make matters worse, testing becomes even more difficult when the base pattern of interest is a combinatorial object, such as integers, dates, URL strings, and phone numbers—sets too large to enumerate.
+Example: Does GPT-2XL know George Washington’s birth date?
+To give a concrete example of false positives and false negatives, let’s consider a simple test of knowledge: Does the LLM know George Washington’s birth date? As shown in the figure below, we formulate this ‘test’ by asking the model to rank 4 choices. Such multiple-choice questions are common in today’s benchmark suites because they are simple to implement. However, 4 choices do not cover all birth dates; what if the model was lucky enough to eliminate the other 3 answers and just guess? That would be a false positive. As shown below, the correct date of February 22, 1732, is chosen by the model because it is the most likely; thus this test concludes the model does know the birth date.
+Multiple choice questions are prone to false positives because they can be arbitrarily easy. Solving this multiple choice can be accomplished by knowing George Washington was born before 1873. In this case, GPT-2XL assigns the highest likelihood to the correct answer.
+We can also try free response, as shown in in the following figure. However, the most likely reply is not a date and thus penalizes the model for being more general than the test task—a possible false negative. “this day in 1732” and “a farm” are reasonable completions for the fill-in-the-blank, yet an automated test system would mark them as not matching the solution set.
+Free response questions are prone to false negatives because the question’s and answer’s implicit constraints are not followed by the model. “this day in 1732” or “a farm” cannot match the reference answer because they do not follow a valid date format.
+A more natural alternative, and one that we explore via our work in ReLM (MLSys ’23), would be to only consider answers that follow a specific date-related format. The way we evaluate this query is by constraining generation to be of the form <Month> <Day>, <Year>, as if we had a “complete” multiple choice solution set, which is too large to enumerate. Because this pattern contains exactly all the solutions of interest, the test minimizes spurious conclusions due to false positives and false negatives. In doing so, we confirm a true negative—GPT-2XL believes George Washington was born on July 4, 1732. That’s of course factually incorrect, but we didn’t trick ourselves into thinking the LLM knew the answer when it didn’t.
+A ReLM query using the anticipated date pattern as a decoding constraint. GPT-2XL incorrectly thinks that July 4, 1732, is the most likely date that George Washington was born on.
+While we don’t have the space to exactly write out how to run these queries in ReLM, you can rest assured that you’ll find the above example in our code.
+The Case for ReLM
+Regular expressions describe the regular languages and are a way of specifying text patterns. Many text-processing tools, such as grep, use regular expressions to locate patterns in text. At a high level, regular languages can describe patterns using the primitives of string literals, disjunction (“OR”), and repetitions. For the purpose of this blog, you can think of regular languages as allowing you to interpolate between a 4-way multiple choice (e.g., A OR B OR C OR D) and one with a combinatorial explosion of choices in a free-response (e.g., all strings of length \(N\)). At the implementation level, regular expressions can be expressed with an equivalent directed graph, called an automaton, that represents all sequences via the edge transitions in the graph.
+ReLM is a Regular Expression engine for Language Models. As shown below, ReLM is an automaton-based constrained decoding system on top of the LLM. Users of ReLM construct queries that encompass the test pattern and how to execute it. Because the user explicitly describes the pattern of interest, ReLM can avoid doing extra work that results in false negatives. Additionally, since the user describes variations of the pattern (e.g., encodings and misspellings), ReLM can cover often-ignored elements in the test set, avoiding false positives. We can essentially describe any pattern or mutation of the pattern as long as the effects can be correctly propagated to the final automaton. Thankfully, there is a rich theory on ways to perform operations on automata (e.g., including misspellings and rewrites), which we utilize when compiling the final automaton. Thus, the user can 1) exactly specify large sets of interest and 2) cover the tokenization artifacts mentioned in the introduction.
+ReLM workflow with the query “The ((cat)|(dog))”. A regular expression query is compiled into an automaton, which is transformed into the LLM-specific set of token sequences representing the query. The query specifies alternative encodings and misspellings considered for the sampling distribution (not used here). Note that “Ġ” represents a space.
+Since the same query pattern can be used for many execution parameters, a single test encoded as a regular expression can lead to a variety of analyses. For example, the query in the above figure could be modified to include all misspellings of the base pattern as well as all the encodings. Additionally, the user can choose between sampling from the test set or finding the most likely sequence in it. Our paper’s results exploring queries surrounding memorization (extracting URLs), gender bias (measuring distributional bias in professions), toxicity (extracting offensive words), and language understanding (completing the correct answer) show that ReLM achieves up to \(15\times\) higher system efficiency in extracting memorized URLs, \(2.5\times\) data efficiency in extracting offensive content, and increased statistical and prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+Our results indicate that subtle differences in query specification can yield dramatically different results. For example, we find that randomly sampling from a URL prefix “https://www.” tends to generate invalid or duplicated URLs. ReLM avoids such inefficiency by returning strings matching the valid URL pattern sorted by likelihood. Likewise, searching over the space of all encodings as well as misspellings enables the \(2.5\times\) data efficiency in extracting toxic content from the LLM and results in different results on the gender bias task. Finally, we can recover prompt tuning behavior on the LAMBADA dataset by modifying the regular expression pattern, demonstrating that even language understanding tasks can benefit from such pattern specification.
+Conclusion
+In this blog, we outlined why it’s important to think of LLM tests in terms of patterns rather than individual sequences. Our work introduces ReLM, a Regular Expression engine for Language Models, to enable test writers to easily write LLM tests that can be described via pattern matching. If you’re interested in learning more about ReLM and how it can reduce the burden of LLM validation, please check out our paper (MLSys ’23) as well as our open-source code.
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of CMU.
+
+
+
+
+
+♥101
+ 5445
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+
+ Navigating to Objects in the Real World
+
+You Might Also Like
+
+
+
+Using Deep Learning to Help Us Understand Language Processing in the Brain
+May 31, 2019
+
+
+
+Policy Certificates and Minimax-Optimal PAC Bounds for Episodic Reinforcement Learning
+August 16, 2019
+
+
+
+Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+June 12, 2020
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+machine learning Research
+Validating Large Language Models with ReLM
+
+
+Authors
+Michael Kuchnik 
+
+
+Affiliations
+
+
+Published
+                        June 5, 2023                    
+
+DOI
+
+
+
+
+Authors
+Michael Kuchnik 
+
+
+Affiliations
+
+
+Published
+                        June 5, 2023                    
+
+DOI
+
+
+Authors
+Michael Kuchnik 
+Affiliations
+
+Published
+                        June 5, 2023                    
+DOI
+
+
+
+ReLM enables writing tests that are guaranteed to come from the set of valid strings, such as dates. Without ReLM, LLMs are free to complete prompts with non-date answers, which are difficult to assess.
+
+TL;DR: While large language models (LLMs) have been touted for their ability to generate natural-sounding text, there are concerns around potential negative effects of LLMs such as data memorization, bias, and inappropriate language. We introduce ReLM (MLSys ’23), a system for validating and querying LLMs using standard regular expressions. We demonstrate via validation tasks on memorization, bias, toxicity, and language understanding that ReLM achieves up to \(15\times\) higher system efficiency, \(2.5\times\) data efficiency, and increased prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+The Winners and Losers in Sequence Prediction
+Consider playing a video game (perhaps in your youth). You randomly enter the following sequence in your controller:
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️
+Suddenly, your character becomes invincible. You’ve discovered the “secret” sequence that the game developer used for testing the levels. After this point in time, everything you do is trivial—the game is over, you win.
+I claim that using large language models (LLMs) to generate text content is similar to playing a game with such secret sequences. Rather than getting surprised to see a change in game state, users of LLMs may be surprised to see a response that is not quite right. It’s possible the LLM violates someone’s privacy, encodes a stereotype, contains explicit material, or hallucinates an event. However, unlike the game, it may be difficult to even reason about how that sequence manifested.
+LLMs operate over tokens (i.e., integers), which are translated via the tokenizer to text. For encoding systems such as Byte-Pair Encoding (BPE), each token maps to 1+ characters. Using the controller analogy, an LLM is a controller having 50000+ “buttons”, and certain buttons operate as “macros” over the string space. For example, ⇑ could represent ⬆️⬆️ and ⇓could represent ⬇️⬇️, enabling the same code to be represented with ⇑⇓⬅️➡️⬅️➡️🅱️🅰️. Importantly, the LLM is unaware of this equivalence mapping—a single edit changing ⬆️⬆️ to ⬆️⬇️ would invalidate ⇑ being substituted into the sequence. Writing “the” instead of “The” could result in a different response from the LLM, even though the difference is stylistic to humans. These tokenization artifacts combined with potential shortcomings in the LLM’s internal reasoning create a minefield of unassuming LLM “bugs”.
+The possibility that a model may deviate from the “correct” set of sequences motivates LLM validation—the task of evaluating a model’s behavior among many axes so that shortcomings can be identified and addressed. The problem can be much worse than our game example—when we expect a single sequence, nearly all sequences are incorrect, a process that exponentially diverges as a function of the sequence length. Intuitively, it gets much harder to output the right sequence when the sequence length grows—correctly “dancing” ⬆️⬆️⬇️⬇️ is easier than ⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️.  In the lab, it’s hard to notice the consequences of generating an incorrect sequence, but as society embraces LLMs for more serious tasks (e.g., writing emails, filing taxes), we’ll want to have more confidence that they work as intended.
+Short of formal verification, the best validation mechanism we have is to build comprehensive test suites for characterizing model behavior over a set of input sequences. Benchmarking efforts such as HeLM are continuing to increase the scope of LLM validation by providing a gamut of test sequences. While I strongly agree with the motivation, I ask: Should we be rethinking how tests themselves are written? Can we systematically generalize sequences to high-level patterns such that test writers don’t have to reason about all the peculiar LLM implementation details that we just discussed?
+Background: Prompting LLMs
+With game codes, the code is entered through the controller. The result, on the other hand, is reflected in the game state (i.e., your character becomes invincible, which I represent with a good outcome ✓). But how does this analogy hold for LLMs?
+⬆️⬆️⬇️⬇️⬅️➡️⬅️➡️🅱️🅰️⇒✓
+For autoregressive LLMs, typically the input is a sequence and the output is a sequence, and both of these are in the same space (e.g., strings of human language). For example, prompting the model with the word “The” would perhaps be followed by “ cat” in the sense that it is either likely or simply possible according to the LLM and the sampling procedure.
+Ⓣⓗⓔ⇒ ⓒⓐⓣ
+If “ cat” is considered a good answer, then we “won” the sequence lottery (represented by ✓). If the sequence is considered a bad answer e.g., the misspelling ” kAt”, then we lost (represented by ✗).
+Ⓣⓗⓔ ⓒⓐⓣ⇒✓
+Ⓣⓗⓔ ⓚⒶⓣ⇒✗
+Keep in mind that the token-level encoding is not unique for a given string sequence, so the above LLM examples will have many representations. The number of representations compounds with the size of the reference strings e.g., all the possible misspellings of ” cat”. Furthermore, the LLM will output a distribution over good and bad sequences, so we’d like to summarize them e.g., by measuring what percentage of sequences are good.
+Problem: Testing LLMs
+As test designers, our goal is to quantitatively measure some aspect of the LLM’s behavior. As we are studying a general notion of tests, we’ll introduce a small amount of formalism to argue our points. Let us call a test, \(T\), which takes a model, \(M\), and returns a boolean represented with 0 (bad answer) or 1 (good answer).
+$$T: M → \{0, 1\}$$
+For classification tasks, \(T\) represents whether the model, \(M\), classified a particular example correctly; the average of these tests is reported with test accuracy. Since correct classification boils down to the predicted class (\(y_\text{pred}:=M(x)\)) matching the ground-truth class (\(y\)), this test can be implemented in one line of code.
+y_pred == y 
+What does \(T\) look like for LLMs? Let’s say we want to test if “The” is followed by “ cat”. Constructing such a test is straightforward, because we can just check if the statement is true. We can imagine \(x\) representing “The” and \(y\) representing “ cat”. If \(y\) is sampled from some distribution (i.e., it’s a random variable), we can get many samples to compute the mean score. Depending on the application, we may or may not be interested in including all the encodings discussed previously as well as possible variations of the base pattern e.g., misspellings.
+Because of the potentially massive number of sequences involved in a test, LLM tests are both more difficult to express and evaluate, leading to tests with insufficient coverage. For example, if we happened to miss some prompt that does lead to “ cat”, our test had a false negative—it concluded it was not possible when it actually was. If we were to check if “ cat” is the most likely string following “The”, we may get false positives in the omitted cases where “ kAt” was more likely. The test designer must carefully consider trading off such sources of error with the implementation and execution complexity of the test.
+With traditional string-level APIs, it’s difficult to make testing trade-offs without rewriting the testing logic altogether—one has to write testing code that explicitly samples from the distribution of interest (e.g., the choice of encodings and misspellings). For example, a privacy-oriented user would want you to be reasonably sure that the LLM couldn’t emit their private information, even with the presence of encoding or misspelling artifacts. Such a minor change in the test’s scope would result in dramatic changes to the underlying test implementation. To make matters worse, testing becomes even more difficult when the base pattern of interest is a combinatorial object, such as integers, dates, URL strings, and phone numbers—sets too large to enumerate.
+Example: Does GPT-2XL know George Washington’s birth date?
+To give a concrete example of false positives and false negatives, let’s consider a simple test of knowledge: Does the LLM know George Washington’s birth date? As shown in the figure below, we formulate this ‘test’ by asking the model to rank 4 choices. Such multiple-choice questions are common in today’s benchmark suites because they are simple to implement. However, 4 choices do not cover all birth dates; what if the model was lucky enough to eliminate the other 3 answers and just guess? That would be a false positive. As shown below, the correct date of February 22, 1732, is chosen by the model because it is the most likely; thus this test concludes the model does know the birth date.
+Multiple choice questions are prone to false positives because they can be arbitrarily easy. Solving this multiple choice can be accomplished by knowing George Washington was born before 1873. In this case, GPT-2XL assigns the highest likelihood to the correct answer.
+We can also try free response, as shown in in the following figure. However, the most likely reply is not a date and thus penalizes the model for being more general than the test task—a possible false negative. “this day in 1732” and “a farm” are reasonable completions for the fill-in-the-blank, yet an automated test system would mark them as not matching the solution set.
+Free response questions are prone to false negatives because the question’s and answer’s implicit constraints are not followed by the model. “this day in 1732” or “a farm” cannot match the reference answer because they do not follow a valid date format.
+A more natural alternative, and one that we explore via our work in ReLM (MLSys ’23), would be to only consider answers that follow a specific date-related format. The way we evaluate this query is by constraining generation to be of the form <Month> <Day>, <Year>, as if we had a “complete” multiple choice solution set, which is too large to enumerate. Because this pattern contains exactly all the solutions of interest, the test minimizes spurious conclusions due to false positives and false negatives. In doing so, we confirm a true negative—GPT-2XL believes George Washington was born on July 4, 1732. That’s of course factually incorrect, but we didn’t trick ourselves into thinking the LLM knew the answer when it didn’t.
+A ReLM query using the anticipated date pattern as a decoding constraint. GPT-2XL incorrectly thinks that July 4, 1732, is the most likely date that George Washington was born on.
+While we don’t have the space to exactly write out how to run these queries in ReLM, you can rest assured that you’ll find the above example in our code.
+The Case for ReLM
+Regular expressions describe the regular languages and are a way of specifying text patterns. Many text-processing tools, such as grep, use regular expressions to locate patterns in text. At a high level, regular languages can describe patterns using the primitives of string literals, disjunction (“OR”), and repetitions. For the purpose of this blog, you can think of regular languages as allowing you to interpolate between a 4-way multiple choice (e.g., A OR B OR C OR D) and one with a combinatorial explosion of choices in a free-response (e.g., all strings of length \(N\)). At the implementation level, regular expressions can be expressed with an equivalent directed graph, called an automaton, that represents all sequences via the edge transitions in the graph.
+ReLM is a Regular Expression engine for Language Models. As shown below, ReLM is an automaton-based constrained decoding system on top of the LLM. Users of ReLM construct queries that encompass the test pattern and how to execute it. Because the user explicitly describes the pattern of interest, ReLM can avoid doing extra work that results in false negatives. Additionally, since the user describes variations of the pattern (e.g., encodings and misspellings), ReLM can cover often-ignored elements in the test set, avoiding false positives. We can essentially describe any pattern or mutation of the pattern as long as the effects can be correctly propagated to the final automaton. Thankfully, there is a rich theory on ways to perform operations on automata (e.g., including misspellings and rewrites), which we utilize when compiling the final automaton. Thus, the user can 1) exactly specify large sets of interest and 2) cover the tokenization artifacts mentioned in the introduction.
+ReLM workflow with the query “The ((cat)|(dog))”. A regular expression query is compiled into an automaton, which is transformed into the LLM-specific set of token sequences representing the query. The query specifies alternative encodings and misspellings considered for the sampling distribution (not used here). Note that “Ġ” represents a space.
+Since the same query pattern can be used for many execution parameters, a single test encoded as a regular expression can lead to a variety of analyses. For example, the query in the above figure could be modified to include all misspellings of the base pattern as well as all the encodings. Additionally, the user can choose between sampling from the test set or finding the most likely sequence in it. Our paper’s results exploring queries surrounding memorization (extracting URLs), gender bias (measuring distributional bias in professions), toxicity (extracting offensive words), and language understanding (completing the correct answer) show that ReLM achieves up to \(15\times\) higher system efficiency in extracting memorized URLs, \(2.5\times\) data efficiency in extracting offensive content, and increased statistical and prompt-tuning coverage compared to state-of-the-art ad-hoc queries.
+Our results indicate that subtle differences in query specification can yield dramatically different results. For example, we find that randomly sampling from a URL prefix “https://www.” tends to generate invalid or duplicated URLs. ReLM avoids such inefficiency by returning strings matching the valid URL pattern sorted by likelihood. Likewise, searching over the space of all encodings as well as misspellings enables the \(2.5\times\) data efficiency in extracting toxic content from the LLM and results in different results on the gender bias task. Finally, we can recover prompt tuning behavior on the LAMBADA dataset by modifying the regular expression pattern, demonstrating that even language understanding tasks can benefit from such pattern specification.
+Conclusion
+In this blog, we outlined why it’s important to think of LLM tests in terms of patterns rather than individual sequences. Our work introduces ReLM, a Regular Expression engine for Language Models, to enable test writers to easily write LLM tests that can be described via pattern matching. If you’re interested in learning more about ReLM and how it can reduce the burden of LLM validation, please check out our paper (MLSys ’23) as well as our open-source code.
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of CMU.
+Multiple choice questions are prone to false positives because they can be arbitrarily easy. Solving this multiple choice can be accomplished by knowing George Washington was born before 1873. In this case, GPT-2XL assigns the highest likelihood to the correct answer.Free response questions are prone to false negatives because the question’s and answer’s implicit constraints are not followed by the model. “this day in 1732” or “a farm” cannot match the reference answer because they do not follow a valid date format.A ReLM query using the anticipated date pattern as a decoding constraint. GPT-2XL incorrectly thinks that July 4, 1732, is the most likely date that George Washington was born on.
+♥101
+ 5445
+You Might Also Like
+
+
+Using Deep Learning to Help Us Understand Language Processing in the Brain
+May 31, 2019
+
+
+
+Policy Certificates and Minimax-Optimal PAC Bounds for Episodic Reinforcement Learning
+August 16, 2019
+
+
+
+Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+June 12, 2020
+
+
+
+Using Deep Learning to Help Us Understand Language Processing in the Brain
+May 31, 2019
+
+
+Policy Certificates and Minimax-Optimal PAC Bounds for Episodic Reinforcement Learning
+August 16, 2019
+
+
+Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+June 12, 2020
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+No Comments
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+ 
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+  [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+[instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+

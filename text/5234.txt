@@ -1,0 +1,3460 @@
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry.Oculus Rift + Zed mini + Leap MotionTo explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame.As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location.The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip.The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change.The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis.We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position.When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better.An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line.It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more.The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances.The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object.From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:From conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations.Home
+
+Team
+TeamDevelopment Timeline
+
+Week 15 Week 14 Week 13 Week 12 Week 11 Week 10 Week 09 Week 08 Week 07 Week 06 Week 05 Week 04 Week 03 Week 02 Week 01
+Week 15Week 14Week 13Week 12Week 11Week 10Week 09Week 08Week 07Week 06Week 05Week 04Week 03Week 02Week 01Design Documentation
+
+Introduction Prototype 1a – 2D Geometry Prototype 1b – 3D Line Prototype 2 – Biomes Prototype 3 – Chemistry Identified Design Patterns Conclusion
+IntroductionPrototype 1a – 2D GeometryPrototype 1b – 3D LinePrototype 2 – BiomesPrototype 3 – ChemistryIdentified Design PatternsConclusionHome
+
+Team
+
+TeamDevelopment Timeline
+
+Week 15
+Week 14
+Week 13
+Week 12
+Week 11
+Week 10
+Week 09
+Week 08
+Week 07
+Week 06
+Week 05
+Week 04
+Week 03
+Week 02
+Week 01
+
+Week 15Week 14Week 13Week 12Week 11Week 10Week 09Week 08Week 07Week 06Week 05Week 04Week 03Week 02Week 01Design Documentation
+
+Introduction
+Prototype 1a – 2D Geometry
+Prototype 1b – 3D Line
+Prototype 2 – Biomes
+Prototype 3 – Chemistry
+Identified Design Patterns
+Conclusion
+
+IntroductionPrototype 1a – 2D GeometryPrototype 1b – 3D LinePrototype 2 – BiomesPrototype 3 – ChemistryIdentified Design PatternsConclusionAdjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problem
+Skip to content
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Home
+
+Team
+Development Timeline
+
+Week 15 Week 14 Week 13 Week 12 Week 11 Week 10 Week 09 Week 08 Week 07 Week 06 Week 05 Week 04 Week 03 Week 02 Week 01
+Design Documentation
+
+Introduction Prototype 1a – 2D Geometry Prototype 1b – 3D Line Prototype 2 – Biomes Prototype 3 – Chemistry Identified Design Patterns Conclusion
+
+
+
+
+
+
+Menu
+Close
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Home
+
+Team
+
+
+Development Timeline
+
+Week 15
+Week 14
+Week 13
+Week 12
+Week 11
+Week 10
+Week 09
+Week 08
+Week 07
+Week 06
+Week 05
+Week 04
+Week 03
+Week 02
+Week 01
+
+
+Design Documentation
+
+Introduction
+Prototype 1a – 2D Geometry
+Prototype 1b – 3D Line
+Prototype 2 – Biomes
+Prototype 3 – Chemistry
+Identified Design Patterns
+Conclusion
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prototype 1b - 3D Line Demo 
+
+
+
+
+
+
+
+
+
+
+Objective 
+
+
+
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry. 
+
+
+
+
+
+
+
+
+
+
+Platform 
+
+
+
+Oculus Rift + Zed mini + Leap Motion 
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+Development Process 
+
+
+
+To explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame. 
+
+
+
+ 
+
+
+
+Implemented Features 
+
+
+
+
+ Move the Graph and Line Equation
+
+
+
+
+
+As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location. 
+
+
+
+
+ View Coordinates
+
+
+
+
+
+The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip. 
+
+
+
+
+ Modify The Line
+
+
+
+
+
+The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change. 
+
+
+
+
+ Move Bounds of Coordinate Space
+
+
+
+
+
+The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis. 
+
+
+
+
+
+
+
+
+
+
+Results 
+
+
+
+Responding To The User 
+
+
+
+We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position. 
+
+
+
+
+ The line with and without the shader
+
+
+
+
+
+When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better. 
+
+
+
+
+ Early version of “explosion” on pinch
+
+
+
+
+
+Separation of Inspection and Manipulation of Virtual Objects 
+
+
+
+An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line. 
+
+
+
+Visual Affordances of Interactables 
+
+
+
+Clearly Visible Interactables 
+
+
+
+It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more. 
+
+
+
+Size and Shape 
+
+
+
+The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances. 
+
+
+
+Positioning Objects in Physical Space 
+
+
+
+The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change. 
+
+
+
+Text in AR 
+
+
+
+While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates. 
+
+
+
+Tracking Difficulties 
+
+
+
+The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object. 
+
+
+
+Future Scope 
+
+
+
+From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:Adjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problemFrom conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Home
+
+Team
+Development Timeline
+
+Week 15 Week 14 Week 13 Week 12 Week 11 Week 10 Week 09 Week 08 Week 07 Week 06 Week 05 Week 04 Week 03 Week 02 Week 01
+Design Documentation
+
+Introduction Prototype 1a – 2D Geometry Prototype 1b – 3D Line Prototype 2 – Biomes Prototype 3 – Chemistry Identified Design Patterns Conclusion
+
+
+
+
+
+
+Menu
+Close
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Home
+
+Team
+
+
+Development Timeline
+
+Week 15
+Week 14
+Week 13
+Week 12
+Week 11
+Week 10
+Week 09
+Week 08
+Week 07
+Week 06
+Week 05
+Week 04
+Week 03
+Week 02
+Week 01
+
+
+Design Documentation
+
+Introduction
+Prototype 1a – 2D Geometry
+Prototype 1b – 3D Line
+Prototype 2 – Biomes
+Prototype 3 – Chemistry
+Identified Design Patterns
+Conclusion
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prototype 1b - 3D Line Demo 
+
+
+
+
+
+
+
+
+
+
+Objective 
+
+
+
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry. 
+
+
+
+
+
+
+
+
+
+
+Platform 
+
+
+
+Oculus Rift + Zed mini + Leap Motion 
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+Development Process 
+
+
+
+To explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame. 
+
+
+
+ 
+
+
+
+Implemented Features 
+
+
+
+
+ Move the Graph and Line Equation
+
+
+
+
+
+As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location. 
+
+
+
+
+ View Coordinates
+
+
+
+
+
+The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip. 
+
+
+
+
+ Modify The Line
+
+
+
+
+
+The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change. 
+
+
+
+
+ Move Bounds of Coordinate Space
+
+
+
+
+
+The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis. 
+
+
+
+
+
+
+
+
+
+
+Results 
+
+
+
+Responding To The User 
+
+
+
+We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position. 
+
+
+
+
+ The line with and without the shader
+
+
+
+
+
+When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better. 
+
+
+
+
+ Early version of “explosion” on pinch
+
+
+
+
+
+Separation of Inspection and Manipulation of Virtual Objects 
+
+
+
+An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line. 
+
+
+
+Visual Affordances of Interactables 
+
+
+
+Clearly Visible Interactables 
+
+
+
+It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more. 
+
+
+
+Size and Shape 
+
+
+
+The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances. 
+
+
+
+Positioning Objects in Physical Space 
+
+
+
+The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change. 
+
+
+
+Text in AR 
+
+
+
+While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates. 
+
+
+
+Tracking Difficulties 
+
+
+
+The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object. 
+
+
+
+Future Scope 
+
+
+
+From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:Adjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problemFrom conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Home
+
+Team
+Development Timeline
+
+Week 15 Week 14 Week 13 Week 12 Week 11 Week 10 Week 09 Week 08 Week 07 Week 06 Week 05 Week 04 Week 03 Week 02 Week 01
+Design Documentation
+
+Introduction Prototype 1a – 2D Geometry Prototype 1b – 3D Line Prototype 2 – Biomes Prototype 3 – Chemistry Identified Design Patterns Conclusion
+
+
+
+
+
+
+Menu
+Close
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Home
+
+Team
+
+
+Development Timeline
+
+Week 15
+Week 14
+Week 13
+Week 12
+Week 11
+Week 10
+Week 09
+Week 08
+Week 07
+Week 06
+Week 05
+Week 04
+Week 03
+Week 02
+Week 01
+
+
+Design Documentation
+
+Introduction
+Prototype 1a – 2D Geometry
+Prototype 1b – 3D Line
+Prototype 2 – Biomes
+Prototype 3 – Chemistry
+Identified Design Patterns
+Conclusion
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+Home
+
+Team
+Development Timeline
+
+Week 15 Week 14 Week 13 Week 12 Week 11 Week 10 Week 09 Week 08 Week 07 Week 06 Week 05 Week 04 Week 03 Week 02 Week 01
+Design Documentation
+
+Introduction Prototype 1a – 2D Geometry Prototype 1b – 3D Line Prototype 2 – Biomes Prototype 3 – Chemistry Identified Design Patterns Conclusion
+
+
+
+
+
+
+Menu
+Close
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Home
+
+Team
+Development Timeline
+
+Week 15 Week 14 Week 13 Week 12 Week 11 Week 10 Week 09 Week 08 Week 07 Week 06 Week 05 Week 04 Week 03 Week 02 Week 01
+Design Documentation
+
+Introduction Prototype 1a – 2D Geometry Prototype 1b – 3D Line Prototype 2 – Biomes Prototype 3 – Chemistry Identified Design Patterns Conclusion
+
+
+
+
+
+
+Menu
+Close
+
+
+
+
+
+
+Home
+
+Team
+Development Timeline
+
+Week 15 Week 14 Week 13 Week 12 Week 11 Week 10 Week 09 Week 08 Week 07 Week 06 Week 05 Week 04 Week 03 Week 02 Week 01
+Design Documentation
+
+Introduction Prototype 1a – 2D Geometry Prototype 1b – 3D Line Prototype 2 – Biomes Prototype 3 – Chemistry Identified Design Patterns Conclusion
+
+
+
+
+
+
+Menu
+Close
+
+
+
+
+Home
+
+Team
+Development Timeline
+
+Week 15 Week 14 Week 13 Week 12 Week 11 Week 10 Week 09 Week 08 Week 07 Week 06 Week 05 Week 04 Week 03 Week 02 Week 01
+Design Documentation
+
+Introduction Prototype 1a – 2D Geometry Prototype 1b – 3D Line Prototype 2 – Biomes Prototype 3 – Chemistry Identified Design Patterns Conclusion
+
+
+
+
+
+Menu
+Close
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Home
+
+Team
+
+
+Development Timeline
+
+Week 15
+Week 14
+Week 13
+Week 12
+Week 11
+Week 10
+Week 09
+Week 08
+Week 07
+Week 06
+Week 05
+Week 04
+Week 03
+Week 02
+Week 01
+
+
+Design Documentation
+
+Introduction
+Prototype 1a – 2D Geometry
+Prototype 1b – 3D Line
+Prototype 2 – Biomes
+Prototype 3 – Chemistry
+Identified Design Patterns
+Conclusion
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prototype 1b - 3D Line Demo 
+
+
+
+
+
+
+
+
+
+
+Objective 
+
+
+
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry. 
+
+
+
+
+
+
+
+
+
+
+Platform 
+
+
+
+Oculus Rift + Zed mini + Leap Motion 
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+Development Process 
+
+
+
+To explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame. 
+
+
+
+ 
+
+
+
+Implemented Features 
+
+
+
+
+ Move the Graph and Line Equation
+
+
+
+
+
+As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location. 
+
+
+
+
+ View Coordinates
+
+
+
+
+
+The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip. 
+
+
+
+
+ Modify The Line
+
+
+
+
+
+The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change. 
+
+
+
+
+ Move Bounds of Coordinate Space
+
+
+
+
+
+The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis. 
+
+
+
+
+
+
+
+
+
+
+Results 
+
+
+
+Responding To The User 
+
+
+
+We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position. 
+
+
+
+
+ The line with and without the shader
+
+
+
+
+
+When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better. 
+
+
+
+
+ Early version of “explosion” on pinch
+
+
+
+
+
+Separation of Inspection and Manipulation of Virtual Objects 
+
+
+
+An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line. 
+
+
+
+Visual Affordances of Interactables 
+
+
+
+Clearly Visible Interactables 
+
+
+
+It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more. 
+
+
+
+Size and Shape 
+
+
+
+The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances. 
+
+
+
+Positioning Objects in Physical Space 
+
+
+
+The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change. 
+
+
+
+Text in AR 
+
+
+
+While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates. 
+
+
+
+Tracking Difficulties 
+
+
+
+The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object. 
+
+
+
+Future Scope 
+
+
+
+From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:Adjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problemFrom conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prototype 1b - 3D Line Demo 
+
+
+
+
+
+
+
+
+
+
+Objective 
+
+
+
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry. 
+
+
+
+
+
+
+
+
+
+
+Platform 
+
+
+
+Oculus Rift + Zed mini + Leap Motion 
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+Development Process 
+
+
+
+To explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame. 
+
+
+
+ 
+
+
+
+Implemented Features 
+
+
+
+
+ Move the Graph and Line Equation
+
+
+
+
+
+As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location. 
+
+
+
+
+ View Coordinates
+
+
+
+
+
+The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip. 
+
+
+
+
+ Modify The Line
+
+
+
+
+
+The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change. 
+
+
+
+
+ Move Bounds of Coordinate Space
+
+
+
+
+
+The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis. 
+
+
+
+
+
+
+
+
+
+
+Results 
+
+
+
+Responding To The User 
+
+
+
+We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position. 
+
+
+
+
+ The line with and without the shader
+
+
+
+
+
+When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better. 
+
+
+
+
+ Early version of “explosion” on pinch
+
+
+
+
+
+Separation of Inspection and Manipulation of Virtual Objects 
+
+
+
+An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line. 
+
+
+
+Visual Affordances of Interactables 
+
+
+
+Clearly Visible Interactables 
+
+
+
+It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more. 
+
+
+
+Size and Shape 
+
+
+
+The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances. 
+
+
+
+Positioning Objects in Physical Space 
+
+
+
+The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change. 
+
+
+
+Text in AR 
+
+
+
+While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates. 
+
+
+
+Tracking Difficulties 
+
+
+
+The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object. 
+
+
+
+Future Scope 
+
+
+
+From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:Adjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problemFrom conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prototype 1b - 3D Line Demo 
+
+
+
+
+
+
+
+
+
+
+Objective 
+
+
+
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry. 
+
+
+
+
+
+
+
+
+
+
+Platform 
+
+
+
+Oculus Rift + Zed mini + Leap Motion 
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+Development Process 
+
+
+
+To explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame. 
+
+
+
+ 
+
+
+
+Implemented Features 
+
+
+
+
+ Move the Graph and Line Equation
+
+
+
+
+
+As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location. 
+
+
+
+
+ View Coordinates
+
+
+
+
+
+The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip. 
+
+
+
+
+ Modify The Line
+
+
+
+
+
+The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change. 
+
+
+
+
+ Move Bounds of Coordinate Space
+
+
+
+
+
+The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis. 
+
+
+
+
+
+
+
+
+
+
+Results 
+
+
+
+Responding To The User 
+
+
+
+We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position. 
+
+
+
+
+ The line with and without the shader
+
+
+
+
+
+When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better. 
+
+
+
+
+ Early version of “explosion” on pinch
+
+
+
+
+
+Separation of Inspection and Manipulation of Virtual Objects 
+
+
+
+An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line. 
+
+
+
+Visual Affordances of Interactables 
+
+
+
+Clearly Visible Interactables 
+
+
+
+It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more. 
+
+
+
+Size and Shape 
+
+
+
+The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances. 
+
+
+
+Positioning Objects in Physical Space 
+
+
+
+The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change. 
+
+
+
+Text in AR 
+
+
+
+While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates. 
+
+
+
+Tracking Difficulties 
+
+
+
+The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object. 
+
+
+
+Future Scope 
+
+
+
+From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:Adjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problemFrom conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prototype 1b - 3D Line Demo 
+
+
+
+
+
+
+
+
+
+
+Objective 
+
+
+
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry. 
+
+
+
+
+
+
+
+
+
+
+Platform 
+
+
+
+Oculus Rift + Zed mini + Leap Motion 
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+Development Process 
+
+
+
+To explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame. 
+
+
+
+ 
+
+
+
+Implemented Features 
+
+
+
+
+ Move the Graph and Line Equation
+
+
+
+
+
+As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location. 
+
+
+
+
+ View Coordinates
+
+
+
+
+
+The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip. 
+
+
+
+
+ Modify The Line
+
+
+
+
+
+The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change. 
+
+
+
+
+ Move Bounds of Coordinate Space
+
+
+
+
+
+The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis. 
+
+
+
+
+
+
+
+
+
+
+Results 
+
+
+
+Responding To The User 
+
+
+
+We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position. 
+
+
+
+
+ The line with and without the shader
+
+
+
+
+
+When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better. 
+
+
+
+
+ Early version of “explosion” on pinch
+
+
+
+
+
+Separation of Inspection and Manipulation of Virtual Objects 
+
+
+
+An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line. 
+
+
+
+Visual Affordances of Interactables 
+
+
+
+Clearly Visible Interactables 
+
+
+
+It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more. 
+
+
+
+Size and Shape 
+
+
+
+The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances. 
+
+
+
+Positioning Objects in Physical Space 
+
+
+
+The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change. 
+
+
+
+Text in AR 
+
+
+
+While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates. 
+
+
+
+Tracking Difficulties 
+
+
+
+The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object. 
+
+
+
+Future Scope 
+
+
+
+From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:Adjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problemFrom conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prototype 1b - 3D Line Demo 
+
+
+
+
+
+
+
+
+
+
+Objective 
+
+
+
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry. 
+
+
+
+
+
+
+
+
+
+
+Platform 
+
+
+
+Oculus Rift + Zed mini + Leap Motion 
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+Development Process 
+
+
+
+To explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame. 
+
+
+
+ 
+
+
+
+Implemented Features 
+
+
+
+
+ Move the Graph and Line Equation
+
+
+
+
+
+As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location. 
+
+
+
+
+ View Coordinates
+
+
+
+
+
+The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip. 
+
+
+
+
+ Modify The Line
+
+
+
+
+
+The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change. 
+
+
+
+
+ Move Bounds of Coordinate Space
+
+
+
+
+
+The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis. 
+
+
+
+
+
+
+
+
+
+
+Results 
+
+
+
+Responding To The User 
+
+
+
+We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position. 
+
+
+
+
+ The line with and without the shader
+
+
+
+
+
+When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better. 
+
+
+
+
+ Early version of “explosion” on pinch
+
+
+
+
+
+Separation of Inspection and Manipulation of Virtual Objects 
+
+
+
+An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line. 
+
+
+
+Visual Affordances of Interactables 
+
+
+
+Clearly Visible Interactables 
+
+
+
+It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more. 
+
+
+
+Size and Shape 
+
+
+
+The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances. 
+
+
+
+Positioning Objects in Physical Space 
+
+
+
+The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change. 
+
+
+
+Text in AR 
+
+
+
+While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates. 
+
+
+
+Tracking Difficulties 
+
+
+
+The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object. 
+
+
+
+Future Scope 
+
+
+
+From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:Adjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problemFrom conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prototype 1b - 3D Line Demo 
+
+
+
+
+
+
+
+
+
+
+Objective 
+
+
+
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry. 
+
+
+
+
+
+
+
+
+
+
+Platform 
+
+
+
+Oculus Rift + Zed mini + Leap Motion 
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+Development Process 
+
+
+
+To explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame. 
+
+
+
+ 
+
+
+
+Implemented Features 
+
+
+
+
+ Move the Graph and Line Equation
+
+
+
+
+
+As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location. 
+
+
+
+
+ View Coordinates
+
+
+
+
+
+The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip. 
+
+
+
+
+ Modify The Line
+
+
+
+
+
+The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change. 
+
+
+
+
+ Move Bounds of Coordinate Space
+
+
+
+
+
+The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis. 
+
+
+
+
+
+
+
+
+
+
+Results 
+
+
+
+Responding To The User 
+
+
+
+We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position. 
+
+
+
+
+ The line with and without the shader
+
+
+
+
+
+When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better. 
+
+
+
+
+ Early version of “explosion” on pinch
+
+
+
+
+
+Separation of Inspection and Manipulation of Virtual Objects 
+
+
+
+An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line. 
+
+
+
+Visual Affordances of Interactables 
+
+
+
+Clearly Visible Interactables 
+
+
+
+It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more. 
+
+
+
+Size and Shape 
+
+
+
+The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances. 
+
+
+
+Positioning Objects in Physical Space 
+
+
+
+The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change. 
+
+
+
+Text in AR 
+
+
+
+While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates. 
+
+
+
+Tracking Difficulties 
+
+
+
+The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object. 
+
+
+
+Future Scope 
+
+
+
+From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:Adjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problemFrom conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prototype 1b - 3D Line Demo 
+
+
+
+
+
+
+
+
+
+
+Objective 
+
+
+
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry. 
+
+
+
+
+
+
+
+
+
+
+Platform 
+
+
+
+Oculus Rift + Zed mini + Leap Motion 
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+Development Process 
+
+
+
+To explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame. 
+
+
+
+ 
+
+
+
+Implemented Features 
+
+
+
+
+ Move the Graph and Line Equation
+
+
+
+
+
+As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location. 
+
+
+
+
+ View Coordinates
+
+
+
+
+
+The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip. 
+
+
+
+
+ Modify The Line
+
+
+
+
+
+The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change. 
+
+
+
+
+ Move Bounds of Coordinate Space
+
+
+
+
+
+The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis. 
+
+
+
+
+
+
+
+
+
+
+Results 
+
+
+
+Responding To The User 
+
+
+
+We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position. 
+
+
+
+
+ The line with and without the shader
+
+
+
+
+
+When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better. 
+
+
+
+
+ Early version of “explosion” on pinch
+
+
+
+
+
+Separation of Inspection and Manipulation of Virtual Objects 
+
+
+
+An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line. 
+
+
+
+Visual Affordances of Interactables 
+
+
+
+Clearly Visible Interactables 
+
+
+
+It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more. 
+
+
+
+Size and Shape 
+
+
+
+The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances. 
+
+
+
+Positioning Objects in Physical Space 
+
+
+
+The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change. 
+
+
+
+Text in AR 
+
+
+
+While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates. 
+
+
+
+Tracking Difficulties 
+
+
+
+The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object. 
+
+
+
+Future Scope 
+
+
+
+From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:Adjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problemFrom conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prototype 1b - 3D Line Demo 
+
+
+
+
+
+
+
+
+
+
+Objective 
+
+
+
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry. 
+
+
+
+
+
+
+
+
+
+
+Platform 
+
+
+
+Oculus Rift + Zed mini + Leap Motion 
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+Development Process 
+
+
+
+To explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame. 
+
+
+
+ 
+
+
+
+Implemented Features 
+
+
+
+
+ Move the Graph and Line Equation
+
+
+
+
+
+As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location. 
+
+
+
+
+ View Coordinates
+
+
+
+
+
+The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip. 
+
+
+
+
+ Modify The Line
+
+
+
+
+
+The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change. 
+
+
+
+
+ Move Bounds of Coordinate Space
+
+
+
+
+
+The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis. 
+
+
+
+
+
+
+
+
+
+
+Results 
+
+
+
+Responding To The User 
+
+
+
+We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position. 
+
+
+
+
+ The line with and without the shader
+
+
+
+
+
+When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better. 
+
+
+
+
+ Early version of “explosion” on pinch
+
+
+
+
+
+Separation of Inspection and Manipulation of Virtual Objects 
+
+
+
+An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line. 
+
+
+
+Visual Affordances of Interactables 
+
+
+
+Clearly Visible Interactables 
+
+
+
+It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more. 
+
+
+
+Size and Shape 
+
+
+
+The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances. 
+
+
+
+Positioning Objects in Physical Space 
+
+
+
+The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change. 
+
+
+
+Text in AR 
+
+
+
+While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates. 
+
+
+
+Tracking Difficulties 
+
+
+
+The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object. 
+
+
+
+Future Scope 
+
+
+
+From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:Adjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problemFrom conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prototype 1b - 3D Line Demo 
+
+Prototype 1b - 3D Line Demo 
+
+
+
+
+
+
+
+
+
+
+
+
+
+Objective 
+
+Objective 
+
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry. 
+
+To explore a gesture language for learner-content interactions in the domain of coordinate geometry. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+Platform 
+
+Platform 
+
+Oculus Rift + Zed mini + Leap Motion 
+
+Oculus Rift + Zed mini + Leap Motion 
+
+ 
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+Development Process 
+
+Development Process 
+
+To explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame. 
+
+To explore a gesture language for learner-content interactions, we decided to create a visualization of a 3D coordinate system that the students could directly interact with. We started out considering a number of interactions, which we had to scope for our time frame. 
+
+ 
+
+ 
+
+Implemented Features 
+
+Implemented Features 
+
+
+ Move the Graph and Line Equation
+
+
+
+
+ Move the Graph and Line Equation
+
+
+
+As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location. 
+
+As the user moves their hand towards the origin, a reactive handle appears that can be pinched to move the graph around. This was useful since we weren’t able to track images to spawn the graph at a specific location, and the user might want to move the objects to a more comfortable location. 
+
+
+ View Coordinates
+
+
+
+
+ View Coordinates
+
+
+
+The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip. 
+
+The user can point within the bounds of the coordinate space to display a tooltip that indicates the X, Y and Z coordinates of the point tracked by their fingertip. 
+
+
+ Modify The Line
+
+
+
+
+ Modify The Line
+
+
+
+The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change. 
+
+The user can also modify the line, either dragging it with a single hand or changing its orientation using two hands. The equation reflects the change. 
+
+
+ Move Bounds of Coordinate Space
+
+
+
+
+ Move Bounds of Coordinate Space
+
+
+
+The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis. 
+
+The user also has the ability to extend the bounds of the coordinate space by moving the arrow handles at the ends of each axis. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+Results 
+
+Results 
+
+Responding To The User 
+
+Responding To The User 
+
+We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position. 
+
+We learned a number of lessons on how best to respond to the user for ease of use. An early win for us was the pinch handle at the origin, which allows the user to reposition the whole graph appears as the user’s hand approaches. It clearly show its affordance through its shape, and it prompts the user to pinch it by moving towards the user’s hands. It also provides some leniency from tracking inaccuracies that may occur on the Leap Motion.A line shader for the 3D line that responds to the user’s palms was also important in reducing overall frustration. A flat shaded line is hard to locate in space, and may exhaust a user that is unable to correctly perceive it’s depth, when it gives no indication on how close or far the user was from the required position. 
+
+
+ The line with and without the shader
+
+
+
+
+ The line with and without the shader
+
+
+
+When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better. 
+
+When we added the shader that responds to user’s hands, it allows the user to subconsciously estimate hand placement, making the experience a bit more ergonomically comfortable. In addition, when the user successfully pinches a point, a small “explosion” effect appears, which confirms the interaction. Similarly, using the dotted lines as guides for when the user is observing a point in space helps the user locate themselves in the space better. 
+
+
+ Early version of “explosion” on pinch
+
+
+
+
+ Early version of “explosion” on pinch
+
+
+
+Separation of Inspection and Manipulation of Virtual Objects 
+
+Separation of Inspection and Manipulation of Virtual Objects 
+
+An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line. 
+
+An important distinction when dealing with the 3D line model was the need to be able to “inspect” elements, like viewing the coordinates of a point in space, along with the need to “manipulate” elements, like changing the orientation of the line. To achieve a separation between these two interactions, we used a pointing gesture to inspect, and reserved the pinching or grabbing gestures to manipulate virtual elements. This works out especially well so that users can feel comfortable inspecting specific points on the line without being worried about accidentally changing its slope and having to reorient the line. 
+
+Visual Affordances of Interactables 
+
+Visual Affordances of Interactables 
+
+Clearly Visible Interactables 
+
+Clearly Visible Interactables 
+
+It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more. 
+
+It is important to have points of interaction that are clearly identifiable and visible. As a gesture language for AR becomes more common, it may be easier to have smaller UI that does not distract from the content of the experience. However, the point handles to move the equation of the line were hard for any users to spot. A possible solution could be to make the points a brighter colour or larger in shape so that they stand out more. 
+
+Size and Shape 
+
+Size and Shape 
+
+The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances. 
+
+The axis handles were too big for their intended interaction, and suggested to users that it should be grabbed with an open hand.  However, the resulting constrained movement (of the cone locked to axis line) resulted in a lack of control and feeling of glitchiness. On top of this, there was no visual feedback of whether the handle was grabbed or not.  It is possible that if the handles were shaped differently or were smaller, users would assume a more accurate interaction (pinching), and interact with more of a purpose in mind.Another learning here is that if a user grabs an object with their full hand, they probably assume they will have unconstrained control of it. Smaller objects, or objects that are attached to things like levers or buttons, usually convey their physical constraint more clearly, ensuring that there is less of a disconnect when users interact with them.A good future work item might be thinking about how to visually convey that the motion of an object is constrained to a line – perhaps using a ring instead of a conical arrow?In all, sometimes the common “assumed” representation of a concept can collide with the visual affordances of its interface. In this case while the cone object fit well with the notion of arrows at the ends of an axis, it did not map well to its sliding affordances. 
+
+Positioning Objects in Physical Space 
+
+Positioning Objects in Physical Space 
+
+The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change. 
+
+The positions of the virtual objects play a big role in the user experience. As this was our first prototype where we did not use any real world tracking to spawn the object, we allowed the user to move all virtual elements (the graph and the equation) and position them as they please. This, however, did sometimes lead to situations where the original spawn location was highly uncomfortable (e.g; passing through the user’s body), which the user could then change. 
+
+Text in AR 
+
+Text in AR 
+
+While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates. 
+
+While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates.While not exactly a new learning, getting text right in AR does require some iteratio. We opted for a simple drop shadow to separate our white text from light backgrounds, but perhaps legibility could be made better by always placing text on contrasting solid plates. 
+
+Tracking Difficulties 
+
+Tracking Difficulties 
+
+The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object. 
+
+The Leap Motion some limitations that affected usability in this context. High school students we tested with were frustrated with the pinching interaction as opposed to grabbing the line.It is also possible that the user’s hands move out of the tracked area while performing an action like rotating a line, which causes some frustration. Indicating to the user that the camera can’t see your hand, and therefore doesn’t know what you’re doing, was something we did manually for our scope, but is a problem that could be solved with some indications in the experience itself.The Leap Motion maintains the state of your hand at the last known state if it can no longer track your hand. This means that if the hand moves out of the tracking area while the user was pinching it, and the user then releases it, the Leap Motion does not register that change and continues “grabbing” the object. 
+
+Future Scope 
+
+Future Scope 
+
+From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:Adjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problemFrom conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations. 
+
+From our early ideas, there were a number of features we discussed but didn’t have the chance to implement:Adjusting the line indirectly – Changing the values of the equation to move the lineScaling the graph – visualizing how the graph continues across larger valuesCreating a lineA task-based scenario where you had to use the concept of a 3D Line and its equation to solve a problemFrom conversation with students and teachers, we gleaned that the students wanted to be able to see more information about the meaning of the equation of the line. This would require some careful instructional design – how much is conveyed in the virtual model, and how much information is reserved for the teacher to impart?The teachers suggested an activity involving creating a 3D model in space using the lines. This was a direct extension of a current activity they perform where they create a cartoon character using 2D line equations. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

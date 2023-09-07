@@ -1,0 +1,2395 @@
+Nowadays most machine learning (ML) models predict labels from features. In classification tasks, an ML model predicts a categorical value and in regression tasks, an ML model predicts a real value. These ML models thus require a large amount of feature-label pairs. While in practice it is not hard to obtain features, it is often costly to obtain labels because this requires human labor. Can we do more? Can we learn a model without too many feature-label pairs? Think of human learning: as humans, we do not need 1,000 cat images and labels “cat” to learn what is a cat or to differentiate cats from dogs. We can also learn the concept through comparisons. When we see a cat/dog, we can compare it with cats we have seen to decide whether we should label it “cat”.Our recent papers (1,2) focus on using comparisons to build ML models. The idea of using comparisons is based on a classical psychological observation: It is easier for people to compare between items than evaluate each item alone. For example, what is the age of the man in the image?Not very easy, right? Is he 20, 30 or 40? We can probably say he is not very old, but it is just hard to be very accurate on the exact age. Now, which person in the two images is older?Now based on the wrinkles and silver hair, you can probably quickly judge that the second man is older. This phenomenon is not only present for this task, but also in many other real-world applications. For example, to diagnose patients, it is usually more difficult to directly label each patient with a kind of disease by experimental tests, but easier to compare the physical conditions of two patients. In material synthesis,  measuring the characteristics of a material usually requires expensive tests, but comparisons are relatively easy through simulations. For movie ratings, it is often hard for us to give scores for a specific movie, but easier to pick our favorite among a list of movies.So how can we build ML models using comparisons? Here we describe an approach that uses comparisons to do inferences on the unlabeled samples and feed inferred labels into existing models. Below we will look at two ways for such inference, for classification and regression respectively.As described above, our setup starts with a set of unlabeled features \(x_1, x_2,…, x_n\), drawn independently and identically distributed (i.i.d.) from a feature distribution \(X\sim P_X\). Let the data dimension be \(d\). Our goal is to learn a function \(f: \mathbb{R}^d \rightarrow \mathcal{Y}\), where \(\mathcal{Y}\) is the label space. For example, for binary classification \(\mathcal{Y}=\{1, -1\}\), and for regression \(\mathcal{Y}=\mathbb{R}\).We assume we can query either direct labels or pairwise comparisons. The direct label \(Y(x)\) is a (possibly noisy) version of \(f(x)\). The comparison \(Z\) is based on a pair of samples \(x,x’\) and indicates which one of \(x,x’\) can possibly have a larger \(f\) value. For binary classification, this means \(Z\) indicates the more positive sample; for regression, \(Z\) indicates the larger target (e.g., the older people of the pair of images). Our goal is to use as few direct label queries as possible.Our high-level strategy is to obtain a fully labeled sample pool \(\hat{y}_1,…,\hat{y}_n\), where \(\hat{y}_i\) are either inferred or directly labeled, to feed into a supervised learning algorithm. We will show how such inference can happen, and how the querying process can neatly combine with the learning algorithm for a better performance.Before we go to the algorithms, we first introduce our workhorse: Ranking from pairwise comparisons. We organize the comparisons to induce a ranking over all the samples. After that, we can do efficient inference with a very small amount of direct labels.There is a vast amount of literature on ranking from pairwise comparisons, based on different assumptions on the comparison matrix and desired properties. If we have perfect and consistent comparisons, we can use QuickSort (or HeapSort, InsertSort) to rank all \(n\) samples with \(O(n\log n)\) comparisons. If comparisons are noisy and inconsistent, things will be more complicated, but we can still obtain some meaningful rankings. We will not go into more details about ranking since it is out of the scope of this post; we refer interested readers to this survey for more papers on this topic.Now let’s suppose we have a ranking over all items. We denote it as \(x_1\prec x_2\prec \cdots\prec x_n\), where \(x_i\prec x_j\) means we think \(f(x_i)\leq f(x_j)\). Note that the actual ranking induced by \(f\) might be different from \(x_1\prec x_2\prec \cdots\prec x_n\), as we can have errors in our comparisons.Now we consider the binary classification problem. If we have a perfect ranking with \begin{align*}f(x_1)\leq f(x_2)\leq \cdots\leq f(x_n),\end{align*} this means the first few samples have labels -1, and then the remaining samples have label +1. Given this specific structure, we would want to find the changing point between negative and positive samples. How are we going to find it?Binary search! Since the ranking is in order, we just need \(\log n\) direct label queries to figure out the changing point. Note that this has a specific meaning in the context of classification:  in the standard supervised learning setting, we need at least \(d\) labels to learn a classifier in \(d\) dimension. Now with this ranking information at hand, we only need to find a threshold in a sequence, which is equivalent to learning a classifier in one dimension. Note that in general the comparison queries are cheaper, so our algorithm can save a lot of cost. There are a few more things to note for classification. First is about ties: Suppose our task is to differentiate between cats and dogs. If we are given two cat images, it doesn’t really matter how we rank them since we only care about the threshold between positive and negative samples.Secondly, we can combine our algorithm with active learning to save even more label cost. Many active learning algorithms ask about a batch of samples in each round, and we can use our binary search to label each batch. In more detail, we show in our paper the following theorem:Theorem (Informal). Suppose each label is correct with probability \(1/2+c\), for a constant \(c\). Then an active learning algorithm would require \(\Omega(d\log(1/\varepsilon))\) direct labels to achieve an error rate of \(\varepsilon\). On the other hand, using binary search on ranking will require \(O(\log(\varepsilon))\) direct labels, and \(O(d\log(d/\varepsilon))\) comparisons.Theorem (Informal). Suppose each label is correct with probability \(1/2+c\), for a constant \(c\). Then an active learning algorithm would require \(\Omega(d\log(1/\varepsilon))\) direct labels to achieve an error rate of \(\varepsilon\). On the other hand, using binary search on ranking will require \(O(\log(\varepsilon))\) direct labels, and \(O(d\log(d/\varepsilon))\) comparisons.If we are doing regression, we cannot hope to find a threshold in the ranking, since we need to predict a real number for each label. However, ranking can still help regression through isotonic regression. Given a ranked sequence\begin{align*} f(x_1)\leq f(x_2)\leq\cdots \leq f(x_n) \text{ and } y_i=f(x_i)+\varepsilon_i, \varepsilon_i\sim \mathcal{N}(0,1),\end{align*} the isotonic regression aims to find the solution of\begin{align*}\min_{\hat{y}_i} & \sum_{i=1}^n (\hat{y}_i-y_i)^2\\s.t.& \hat{y}_i\leq \hat{y}_{i+1}, \forall i=1,2,…,n-1.\end{align*}If we use \(y_i\) as our labels, the mean-squared error \(\frac{1}{n}\sum_{i=1}^m (y_i-f(x_i))^2\) will have an expectation of 1, since \(\varepsilon_i\sim \mathcal{N}(0,1)\). Isotonic regression enjoys  \(m^{-2/3}\) statistical rate, which is diminishing as \(n\rightarrow \infty\). For a reference, see (Zhang, 2002).The \(m^{-2/3}\) decays faster than the optimal rates of many non-parametric regression problems because it is dimension-independent. Non-parametric methods typically have an error rate of \(m^{-\frac{2}{d+2}}\) given \(m\) labels, the so-called curse of dimensionality (see Tsybakov’s book for an introduction to non-parametric regression). Since the rate of isotonic regression decays much faster than the non-parametric regression problems, we only need a fraction of labels for good accuracy. We leverage this property to design the following algorithm: suppose we only directly query \(m\) labels. While having a ranking over \(n\) points, we can infer the unlabeled samples by just using their nearest labeled points. That is, we query \(y_{t_1},…,y_{t_m}\) and get refined values \(\hat{y}_{t_1},…,\hat{y}_{t_m}\) using the above isotonic regression formulation, we label each point as \(\hat{y}_i=\hat{y}_{t_j}\), where \(i \in 1,…,n\) and \(t_j\) is \(i\)’s nearest neighbor in \(\{t_1,…,t_m\}\).In our paper, we analyze this algorithm under the non-parametric regression setting. We have the following theorem:Theorem (Informal). Suppose the underlying function \(f\) is Lipschitz. If we use \(m\) direct labels, any algorithm will incur an error of at least \(\Omega\left(m^{-\frac{2}{d+2}}\right)\). If we use isotonic regression with nearest neighbors, the error will be \(m^{-\frac{2}{3}}+n^{-\frac{2}{d}}\), where \(m\) is the number of direct labels, and \(n\) is the number of ranked points. This rate is optimal for any algorithm using \(m\) direct labels and \(n\) ranked points.Theorem (Informal). Suppose the underlying function \(f\) is Lipschitz. If we use \(m\) direct labels, any algorithm will incur an error of at least \(\Omega\left(m^{-\frac{2}{d+2}}\right)\). If we use isotonic regression with nearest neighbors, the error will be \(m^{-\frac{2}{3}}+n^{-\frac{2}{d}}\), where \(m\) is the number of direct labels, and \(n\) is the number of ranked points. This rate is optimal for any algorithm using \(m\) direct labels and \(n\) ranked points.Note the MSE of non-parametric regression using only the labeled samples is \(\Theta(m^{-\frac{2}{d+2}})\) which is exponential in \(d\) and makes non-parametric regression impractical in high-dimensions. Focusing on the dependence on \(m\), our result improves the rate to  \(m^{-2/3}\), which is no longer exponential. Therefore, using the ranking information we can avoid the curse of dimensionality.Now let’s test our algorithm in practice. Our task is to predict the ages of people in images, as aforementioned.  We use the APPA-REAL dataset, with 7,113 images and associated ages. The dataset is suitable for comparisons because it contains both the biological age, as well as the apparent age estimated from human labelers. Suppose our goal is to predict the biological age, and we can simulate comparisons by comparing the apparent ages.Our classification task is to judge whether a person is under or over 30 years old.  We compare our method with a base-line active learning method which only uses label queries. Both methods use a linear SVM classifier ( features are extracted from the 128-dimension top layer of FaceNet, an unsupervised method to extract features from faces). The shades represent standard variation over 20 repeats of experiments. The plots show comparisons indeed reduce the number of label queries.Our regression task is to predict the actual ages, and we compute the mean squared error (MSE) to evaluate different methods. Our label-only baselines are nearest neighbors(NN) methods with 5 or 10 neighbors(5-NN and 10-NN), and support vector regression(SVR). Our methods use 5-NN or 10-NN after we have inferred the labels via isotonic regression. We thus name our methods R\(^2\) 5-NN and R\(^2\) 10-NN. Again, the experiment shows comparisons can reduce the number of label queries.Of course, binary classification and regression are not the only settings where using comparison information can have a big impact. Using the rank-and-infer approach, we hope to extend these results to multi-class classification, optimization, and reinforcement learning. Feel free to get in touch if you want to learn more!DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of Carnegie Mellon University. Thanks for writing. Not ML fluent, so please excuse vocab. Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?Thanks,
+YichongDear Mr. Xu,Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.If you are interested in discussing this topic, feel free to contact me via email.Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.Hi,Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.Name * Email * Website  Save my name, email, and website in this browser for the next time I comment. 
+
+[instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+[ Home ][ Submissions ][ About ]HomeSubmissionsAboutHomeSubmissionsAboutResearchEducational
+
+♥291
+ 33118
+ 6
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Continuous-Time View of Early Stopping for Least Squares (or: How I Learned to Stop Worrying and Love Early Stopping)
+ Representer Point Selection for Explaining Deep Neural Networks
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+
+Input your search keywords and press Enter.
+
+
+
+
+
+
+
+Categories:
+
+Research
+Educational
+
+ 
+
+
+
+
+
+
+
+machine learning Research
+Building Machine Learning Models via Comparisons
+
+
+Authors
+Yichong Xu 
+
+
+Affiliations
+
+
+Published
+                        March 29, 2019                    
+
+DOI
+
+
+
+
+
+
+
+
+Nowadays most machine learning (ML) models predict labels from features. In classification tasks, an ML model predicts a categorical value and in regression tasks, an ML model predicts a real value. These ML models thus require a large amount of feature-label pairs. While in practice it is not hard to obtain features, it is often costly to obtain labels because this requires human labor. 
+Can we do more? Can we learn a model without too many feature-label pairs? Think of human learning: as humans, we do not need 1,000 cat images and labels “cat” to learn what is a cat or to differentiate cats from dogs. We can also learn the concept through comparisons. When we see a cat/dog, we can compare it with cats we have seen to decide whether we should label it “cat”.
+Our recent papers (1,2) focus on using comparisons to build ML models. The idea of using comparisons is based on a classical psychological observation: It is easier for people to compare between items than evaluate each item alone. For example, what is the age of the man in the image?
+
+Not very easy, right? Is he 20, 30 or 40? We can probably say he is not very old, but it is just hard to be very accurate on the exact age. Now, which person in the two images is older?
+
+Now based on the wrinkles and silver hair, you can probably quickly judge that the second man is older. 
+This phenomenon is not only present for this task, but also in many other real-world applications. For example, to diagnose patients, it is usually more difficult to directly label each patient with a kind of disease by experimental tests, but easier to compare the physical conditions of two patients. In material synthesis,  measuring the characteristics of a material usually requires expensive tests, but comparisons are relatively easy through simulations. For movie ratings, it is often hard for us to give scores for a specific movie, but easier to pick our favorite among a list of movies.
+So how can we build ML models using comparisons? Here we describe an approach that uses comparisons to do inferences on the unlabeled samples and feed inferred labels into existing models. Below we will look at two ways for such inference, for classification and regression respectively.
+The Setup
+As described above, our setup starts with a set of unlabeled features \(x_1, x_2,…, x_n\), drawn independently and identically distributed (i.i.d.) from a feature distribution \(X\sim P_X\). Let the data dimension be \(d\). Our goal is to learn a function \(f: \mathbb{R}^d \rightarrow \mathcal{Y}\), where \(\mathcal{Y}\) is the label space. For example, for binary classification \(\mathcal{Y}=\{1, -1\}\), and for regression \(\mathcal{Y}=\mathbb{R}\).
+We assume we can query either direct labels or pairwise comparisons. The direct label \(Y(x)\) is a (possibly noisy) version of \(f(x)\). The comparison \(Z\) is based on a pair of samples \(x,x’\) and indicates which one of \(x,x’\) can possibly have a larger \(f\) value. For binary classification, this means \(Z\) indicates the more positive sample; for regression, \(Z\) indicates the larger target (e.g., the older people of the pair of images). Our goal is to use as few direct label queries as possible.
+Our high-level strategy is to obtain a fully labeled sample pool \(\hat{y}_1,…,\hat{y}_n\), where \(\hat{y}_i\) are either inferred or directly labeled, to feed into a supervised learning algorithm. We will show how such inference can happen, and how the querying process can neatly combine with the learning algorithm for a better performance.
+Our Building Block: Ranking
+Before we go to the algorithms, we first introduce our workhorse: Ranking from pairwise comparisons. We organize the comparisons to induce a ranking over all the samples. After that, we can do efficient inference with a very small amount of direct labels.
+There is a vast amount of literature on ranking from pairwise comparisons, based on different assumptions on the comparison matrix and desired properties. If we have perfect and consistent comparisons, we can use QuickSort (or HeapSort, InsertSort) to rank all \(n\) samples with \(O(n\log n)\) comparisons. If comparisons are noisy and inconsistent, things will be more complicated, but we can still obtain some meaningful rankings. We will not go into more details about ranking since it is out of the scope of this post; we refer interested readers to this survey for more papers on this topic.
+Now let’s suppose we have a ranking over all items. We denote it as \(x_1\prec x_2\prec \cdots\prec x_n\), where \(x_i\prec x_j\) means we think \(f(x_i)\leq f(x_j)\). Note that the actual ranking induced by \(f\) might be different from \(x_1\prec x_2\prec \cdots\prec x_n\), as we can have errors in our comparisons.
+Classification: Binary Search on Ranking
+Now we consider the binary classification problem. If we have a perfect ranking with \begin{align*}f(x_1)\leq f(x_2)\leq \cdots\leq f(x_n),\end{align*} this means the first few samples have labels -1, and then the remaining samples have label +1. Given this specific structure, we would want to find the changing point between negative and positive samples. How are we going to find it?
+Binary search! Since the ranking is in order, we just need \(\log n\) direct label queries to figure out the changing point. Note that this has a specific meaning in the context of classification:  in the standard supervised learning setting, we need at least \(d\) labels to learn a classifier in \(d\) dimension. Now with this ranking information at hand, we only need to find a threshold in a sequence, which is equivalent to learning a classifier in one dimension. Note that in general the comparison queries are cheaper, so our algorithm can save a lot of cost. 
+There are a few more things to note for classification. First is about ties: Suppose our task is to differentiate between cats and dogs. If we are given two cat images, it doesn’t really matter how we rank them since we only care about the threshold between positive and negative samples.
+Secondly, we can combine our algorithm with active learning to save even more label cost. Many active learning algorithms ask about a batch of samples in each round, and we can use our binary search to label each batch. In more detail, we show in our paper the following theorem:
+Theorem (Informal). Suppose each label is correct with probability \(1/2+c\), for a constant \(c\). Then an active learning algorithm would require \(\Omega(d\log(1/\varepsilon))\) direct labels to achieve an error rate of \(\varepsilon\). On the other hand, using binary search on ranking will require \(O(\log(\varepsilon))\) direct labels, and \(O(d\log(d/\varepsilon))\) comparisons.
+Regression: Isotonic Regression
+If we are doing regression, we cannot hope to find a threshold in the ranking, since we need to predict a real number for each label. However, ranking can still help regression through isotonic regression. Given a ranked sequence\begin{align*} f(x_1)\leq f(x_2)\leq\cdots \leq f(x_n) \text{ and } y_i=f(x_i)+\varepsilon_i, \varepsilon_i\sim \mathcal{N}(0,1),\end{align*} the isotonic regression aims to find the solution of\begin{align*}\min_{\hat{y}_i} & \sum_{i=1}^n (\hat{y}_i-y_i)^2\\s.t.& \hat{y}_i\leq \hat{y}_{i+1}, \forall i=1,2,…,n-1.\end{align*}If we use \(y_i\) as our labels, the mean-squared error \(\frac{1}{n}\sum_{i=1}^m (y_i-f(x_i))^2\) will have an expectation of 1, since \(\varepsilon_i\sim \mathcal{N}(0,1)\). Isotonic regression enjoys  \(m^{-2/3}\) statistical rate, which is diminishing as \(n\rightarrow \infty\). For a reference, see (Zhang, 2002).
+The \(m^{-2/3}\) decays faster than the optimal rates of many non-parametric regression problems because it is dimension-independent. Non-parametric methods typically have an error rate of \(m^{-\frac{2}{d+2}}\) given \(m\) labels, the so-called curse of dimensionality (see Tsybakov’s book for an introduction to non-parametric regression). Since the rate of isotonic regression decays much faster than the non-parametric regression problems, we only need a fraction of labels for good accuracy. We leverage this property to design the following algorithm: suppose we only directly query \(m\) labels. While having a ranking over \(n\) points, we can infer the unlabeled samples by just using their nearest labeled points. That is, we query \(y_{t_1},…,y_{t_m}\) and get refined values \(\hat{y}_{t_1},…,\hat{y}_{t_m}\) using the above isotonic regression formulation, we label each point as \(\hat{y}_i=\hat{y}_{t_j}\), where \(i \in 1,…,n\) and \(t_j\) is \(i\)’s nearest neighbor in \(\{t_1,…,t_m\}\).
+In our paper, we analyze this algorithm under the non-parametric regression setting. We have the following theorem:
+Theorem (Informal). Suppose the underlying function \(f\) is Lipschitz. If we use \(m\) direct labels, any algorithm will incur an error of at least \(\Omega\left(m^{-\frac{2}{d+2}}\right)\). If we use isotonic regression with nearest neighbors, the error will be \(m^{-\frac{2}{3}}+n^{-\frac{2}{d}}\), where \(m\) is the number of direct labels, and \(n\) is the number of ranked points. This rate is optimal for any algorithm using \(m\) direct labels and \(n\) ranked points.
+Note the MSE of non-parametric regression using only the labeled samples is \(\Theta(m^{-\frac{2}{d+2}})\) which is exponential in \(d\) and makes non-parametric regression impractical in high-dimensions. Focusing on the dependence on \(m\), our result improves the rate to  \(m^{-2/3}\), which is no longer exponential. Therefore, using the ranking information we can avoid the curse of dimensionality.
+Comparison in Practice
+Now let’s test our algorithm in practice. Our task is to predict the ages of people in images, as aforementioned.  We use the APPA-REAL dataset, with 7,113 images and associated ages. The dataset is suitable for comparisons because it contains both the biological age, as well as the apparent age estimated from human labelers. Suppose our goal is to predict the biological age, and we can simulate comparisons by comparing the apparent ages.
+Our classification task is to judge whether a person is under or over 30 years old.  We compare our method with a base-line active learning method which only uses label queries. Both methods use a linear SVM classifier ( features are extracted from the 128-dimension top layer of FaceNet, an unsupervised method to extract features from faces). The shades represent standard variation over 20 repeats of experiments. The plots show comparisons indeed reduce the number of label queries.
+
+Our regression task is to predict the actual ages, and we compute the mean squared error (MSE) to evaluate different methods. Our label-only baselines are nearest neighbors(NN) methods with 5 or 10 neighbors(5-NN and 10-NN), and support vector regression(SVR). Our methods use 5-NN or 10-NN after we have inferred the labels via isotonic regression. We thus name our methods R\(^2\) 5-NN and R\(^2\) 10-NN. Again, the experiment shows comparisons can reduce the number of label queries.
+
+Future Works
+Of course, binary classification and regression are not the only settings where using comparison information can have a big impact. Using the rank-and-infer approach, we hope to extend these results to multi-class classification, optimization, and reinforcement learning. Feel free to get in touch if you want to learn more!
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of Carnegie Mellon University. 
+
+
+machine learning
+
+
+
+
+♥291
+ 33118
+ 6
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Continuous-Time View of Early Stopping for Least Squares (or: How I Learned to Stop Worrying and Love Early Stopping)
+
+ Representer Point Selection for Explaining Deep Neural Networks
+
+You Might Also Like
+
+
+
+Counterfactual predictions under runtime confounding
+April 16, 2021
+
+
+
+CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+July 3, 2020
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+6 Comments
+
+
+ 
+
+
+Reply 
+Kyle Butler
+March 30, 2019 at 10:32 AM
+Thanks for writing. Not ML fluent, so please excuse vocab. 
+Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? 
+Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+Nikita Popov
+May 5, 2019 at 2:40 PM
+Dear Mr. Xu,
+Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.
+My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.
+If you are interested in discussing this topic, feel free to contact me via email.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+pg2455
+May 13, 2019 at 9:16 AM
+Hi,
+Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+ 
+
+
+
+
+
+
+
+
+machine learning Research
+Building Machine Learning Models via Comparisons
+
+
+Authors
+Yichong Xu 
+
+
+Affiliations
+
+
+Published
+                        March 29, 2019                    
+
+DOI
+
+
+
+
+
+
+
+
+Nowadays most machine learning (ML) models predict labels from features. In classification tasks, an ML model predicts a categorical value and in regression tasks, an ML model predicts a real value. These ML models thus require a large amount of feature-label pairs. While in practice it is not hard to obtain features, it is often costly to obtain labels because this requires human labor. 
+Can we do more? Can we learn a model without too many feature-label pairs? Think of human learning: as humans, we do not need 1,000 cat images and labels “cat” to learn what is a cat or to differentiate cats from dogs. We can also learn the concept through comparisons. When we see a cat/dog, we can compare it with cats we have seen to decide whether we should label it “cat”.
+Our recent papers (1,2) focus on using comparisons to build ML models. The idea of using comparisons is based on a classical psychological observation: It is easier for people to compare between items than evaluate each item alone. For example, what is the age of the man in the image?
+
+Not very easy, right? Is he 20, 30 or 40? We can probably say he is not very old, but it is just hard to be very accurate on the exact age. Now, which person in the two images is older?
+
+Now based on the wrinkles and silver hair, you can probably quickly judge that the second man is older. 
+This phenomenon is not only present for this task, but also in many other real-world applications. For example, to diagnose patients, it is usually more difficult to directly label each patient with a kind of disease by experimental tests, but easier to compare the physical conditions of two patients. In material synthesis,  measuring the characteristics of a material usually requires expensive tests, but comparisons are relatively easy through simulations. For movie ratings, it is often hard for us to give scores for a specific movie, but easier to pick our favorite among a list of movies.
+So how can we build ML models using comparisons? Here we describe an approach that uses comparisons to do inferences on the unlabeled samples and feed inferred labels into existing models. Below we will look at two ways for such inference, for classification and regression respectively.
+The Setup
+As described above, our setup starts with a set of unlabeled features \(x_1, x_2,…, x_n\), drawn independently and identically distributed (i.i.d.) from a feature distribution \(X\sim P_X\). Let the data dimension be \(d\). Our goal is to learn a function \(f: \mathbb{R}^d \rightarrow \mathcal{Y}\), where \(\mathcal{Y}\) is the label space. For example, for binary classification \(\mathcal{Y}=\{1, -1\}\), and for regression \(\mathcal{Y}=\mathbb{R}\).
+We assume we can query either direct labels or pairwise comparisons. The direct label \(Y(x)\) is a (possibly noisy) version of \(f(x)\). The comparison \(Z\) is based on a pair of samples \(x,x’\) and indicates which one of \(x,x’\) can possibly have a larger \(f\) value. For binary classification, this means \(Z\) indicates the more positive sample; for regression, \(Z\) indicates the larger target (e.g., the older people of the pair of images). Our goal is to use as few direct label queries as possible.
+Our high-level strategy is to obtain a fully labeled sample pool \(\hat{y}_1,…,\hat{y}_n\), where \(\hat{y}_i\) are either inferred or directly labeled, to feed into a supervised learning algorithm. We will show how such inference can happen, and how the querying process can neatly combine with the learning algorithm for a better performance.
+Our Building Block: Ranking
+Before we go to the algorithms, we first introduce our workhorse: Ranking from pairwise comparisons. We organize the comparisons to induce a ranking over all the samples. After that, we can do efficient inference with a very small amount of direct labels.
+There is a vast amount of literature on ranking from pairwise comparisons, based on different assumptions on the comparison matrix and desired properties. If we have perfect and consistent comparisons, we can use QuickSort (or HeapSort, InsertSort) to rank all \(n\) samples with \(O(n\log n)\) comparisons. If comparisons are noisy and inconsistent, things will be more complicated, but we can still obtain some meaningful rankings. We will not go into more details about ranking since it is out of the scope of this post; we refer interested readers to this survey for more papers on this topic.
+Now let’s suppose we have a ranking over all items. We denote it as \(x_1\prec x_2\prec \cdots\prec x_n\), where \(x_i\prec x_j\) means we think \(f(x_i)\leq f(x_j)\). Note that the actual ranking induced by \(f\) might be different from \(x_1\prec x_2\prec \cdots\prec x_n\), as we can have errors in our comparisons.
+Classification: Binary Search on Ranking
+Now we consider the binary classification problem. If we have a perfect ranking with \begin{align*}f(x_1)\leq f(x_2)\leq \cdots\leq f(x_n),\end{align*} this means the first few samples have labels -1, and then the remaining samples have label +1. Given this specific structure, we would want to find the changing point between negative and positive samples. How are we going to find it?
+Binary search! Since the ranking is in order, we just need \(\log n\) direct label queries to figure out the changing point. Note that this has a specific meaning in the context of classification:  in the standard supervised learning setting, we need at least \(d\) labels to learn a classifier in \(d\) dimension. Now with this ranking information at hand, we only need to find a threshold in a sequence, which is equivalent to learning a classifier in one dimension. Note that in general the comparison queries are cheaper, so our algorithm can save a lot of cost. 
+There are a few more things to note for classification. First is about ties: Suppose our task is to differentiate between cats and dogs. If we are given two cat images, it doesn’t really matter how we rank them since we only care about the threshold between positive and negative samples.
+Secondly, we can combine our algorithm with active learning to save even more label cost. Many active learning algorithms ask about a batch of samples in each round, and we can use our binary search to label each batch. In more detail, we show in our paper the following theorem:
+Theorem (Informal). Suppose each label is correct with probability \(1/2+c\), for a constant \(c\). Then an active learning algorithm would require \(\Omega(d\log(1/\varepsilon))\) direct labels to achieve an error rate of \(\varepsilon\). On the other hand, using binary search on ranking will require \(O(\log(\varepsilon))\) direct labels, and \(O(d\log(d/\varepsilon))\) comparisons.
+Regression: Isotonic Regression
+If we are doing regression, we cannot hope to find a threshold in the ranking, since we need to predict a real number for each label. However, ranking can still help regression through isotonic regression. Given a ranked sequence\begin{align*} f(x_1)\leq f(x_2)\leq\cdots \leq f(x_n) \text{ and } y_i=f(x_i)+\varepsilon_i, \varepsilon_i\sim \mathcal{N}(0,1),\end{align*} the isotonic regression aims to find the solution of\begin{align*}\min_{\hat{y}_i} & \sum_{i=1}^n (\hat{y}_i-y_i)^2\\s.t.& \hat{y}_i\leq \hat{y}_{i+1}, \forall i=1,2,…,n-1.\end{align*}If we use \(y_i\) as our labels, the mean-squared error \(\frac{1}{n}\sum_{i=1}^m (y_i-f(x_i))^2\) will have an expectation of 1, since \(\varepsilon_i\sim \mathcal{N}(0,1)\). Isotonic regression enjoys  \(m^{-2/3}\) statistical rate, which is diminishing as \(n\rightarrow \infty\). For a reference, see (Zhang, 2002).
+The \(m^{-2/3}\) decays faster than the optimal rates of many non-parametric regression problems because it is dimension-independent. Non-parametric methods typically have an error rate of \(m^{-\frac{2}{d+2}}\) given \(m\) labels, the so-called curse of dimensionality (see Tsybakov’s book for an introduction to non-parametric regression). Since the rate of isotonic regression decays much faster than the non-parametric regression problems, we only need a fraction of labels for good accuracy. We leverage this property to design the following algorithm: suppose we only directly query \(m\) labels. While having a ranking over \(n\) points, we can infer the unlabeled samples by just using their nearest labeled points. That is, we query \(y_{t_1},…,y_{t_m}\) and get refined values \(\hat{y}_{t_1},…,\hat{y}_{t_m}\) using the above isotonic regression formulation, we label each point as \(\hat{y}_i=\hat{y}_{t_j}\), where \(i \in 1,…,n\) and \(t_j\) is \(i\)’s nearest neighbor in \(\{t_1,…,t_m\}\).
+In our paper, we analyze this algorithm under the non-parametric regression setting. We have the following theorem:
+Theorem (Informal). Suppose the underlying function \(f\) is Lipschitz. If we use \(m\) direct labels, any algorithm will incur an error of at least \(\Omega\left(m^{-\frac{2}{d+2}}\right)\). If we use isotonic regression with nearest neighbors, the error will be \(m^{-\frac{2}{3}}+n^{-\frac{2}{d}}\), where \(m\) is the number of direct labels, and \(n\) is the number of ranked points. This rate is optimal for any algorithm using \(m\) direct labels and \(n\) ranked points.
+Note the MSE of non-parametric regression using only the labeled samples is \(\Theta(m^{-\frac{2}{d+2}})\) which is exponential in \(d\) and makes non-parametric regression impractical in high-dimensions. Focusing on the dependence on \(m\), our result improves the rate to  \(m^{-2/3}\), which is no longer exponential. Therefore, using the ranking information we can avoid the curse of dimensionality.
+Comparison in Practice
+Now let’s test our algorithm in practice. Our task is to predict the ages of people in images, as aforementioned.  We use the APPA-REAL dataset, with 7,113 images and associated ages. The dataset is suitable for comparisons because it contains both the biological age, as well as the apparent age estimated from human labelers. Suppose our goal is to predict the biological age, and we can simulate comparisons by comparing the apparent ages.
+Our classification task is to judge whether a person is under or over 30 years old.  We compare our method with a base-line active learning method which only uses label queries. Both methods use a linear SVM classifier ( features are extracted from the 128-dimension top layer of FaceNet, an unsupervised method to extract features from faces). The shades represent standard variation over 20 repeats of experiments. The plots show comparisons indeed reduce the number of label queries.
+
+Our regression task is to predict the actual ages, and we compute the mean squared error (MSE) to evaluate different methods. Our label-only baselines are nearest neighbors(NN) methods with 5 or 10 neighbors(5-NN and 10-NN), and support vector regression(SVR). Our methods use 5-NN or 10-NN after we have inferred the labels via isotonic regression. We thus name our methods R\(^2\) 5-NN and R\(^2\) 10-NN. Again, the experiment shows comparisons can reduce the number of label queries.
+
+Future Works
+Of course, binary classification and regression are not the only settings where using comparison information can have a big impact. Using the rank-and-infer approach, we hope to extend these results to multi-class classification, optimization, and reinforcement learning. Feel free to get in touch if you want to learn more!
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of Carnegie Mellon University. 
+
+
+machine learning
+
+
+
+
+♥291
+ 33118
+ 6
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Continuous-Time View of Early Stopping for Least Squares (or: How I Learned to Stop Worrying and Love Early Stopping)
+
+ Representer Point Selection for Explaining Deep Neural Networks
+
+You Might Also Like
+
+
+
+Counterfactual predictions under runtime confounding
+April 16, 2021
+
+
+
+CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+July 3, 2020
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+6 Comments
+
+
+ 
+
+
+Reply 
+Kyle Butler
+March 30, 2019 at 10:32 AM
+Thanks for writing. Not ML fluent, so please excuse vocab. 
+Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? 
+Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+Nikita Popov
+May 5, 2019 at 2:40 PM
+Dear Mr. Xu,
+Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.
+My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.
+If you are interested in discussing this topic, feel free to contact me via email.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+pg2455
+May 13, 2019 at 9:16 AM
+Hi,
+Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+
+
+
+machine learning Research
+Building Machine Learning Models via Comparisons
+
+
+Authors
+Yichong Xu 
+
+
+Affiliations
+
+
+Published
+                        March 29, 2019                    
+
+DOI
+
+
+
+
+
+
+
+
+Nowadays most machine learning (ML) models predict labels from features. In classification tasks, an ML model predicts a categorical value and in regression tasks, an ML model predicts a real value. These ML models thus require a large amount of feature-label pairs. While in practice it is not hard to obtain features, it is often costly to obtain labels because this requires human labor. 
+Can we do more? Can we learn a model without too many feature-label pairs? Think of human learning: as humans, we do not need 1,000 cat images and labels “cat” to learn what is a cat or to differentiate cats from dogs. We can also learn the concept through comparisons. When we see a cat/dog, we can compare it with cats we have seen to decide whether we should label it “cat”.
+Our recent papers (1,2) focus on using comparisons to build ML models. The idea of using comparisons is based on a classical psychological observation: It is easier for people to compare between items than evaluate each item alone. For example, what is the age of the man in the image?
+
+Not very easy, right? Is he 20, 30 or 40? We can probably say he is not very old, but it is just hard to be very accurate on the exact age. Now, which person in the two images is older?
+
+Now based on the wrinkles and silver hair, you can probably quickly judge that the second man is older. 
+This phenomenon is not only present for this task, but also in many other real-world applications. For example, to diagnose patients, it is usually more difficult to directly label each patient with a kind of disease by experimental tests, but easier to compare the physical conditions of two patients. In material synthesis,  measuring the characteristics of a material usually requires expensive tests, but comparisons are relatively easy through simulations. For movie ratings, it is often hard for us to give scores for a specific movie, but easier to pick our favorite among a list of movies.
+So how can we build ML models using comparisons? Here we describe an approach that uses comparisons to do inferences on the unlabeled samples and feed inferred labels into existing models. Below we will look at two ways for such inference, for classification and regression respectively.
+The Setup
+As described above, our setup starts with a set of unlabeled features \(x_1, x_2,…, x_n\), drawn independently and identically distributed (i.i.d.) from a feature distribution \(X\sim P_X\). Let the data dimension be \(d\). Our goal is to learn a function \(f: \mathbb{R}^d \rightarrow \mathcal{Y}\), where \(\mathcal{Y}\) is the label space. For example, for binary classification \(\mathcal{Y}=\{1, -1\}\), and for regression \(\mathcal{Y}=\mathbb{R}\).
+We assume we can query either direct labels or pairwise comparisons. The direct label \(Y(x)\) is a (possibly noisy) version of \(f(x)\). The comparison \(Z\) is based on a pair of samples \(x,x’\) and indicates which one of \(x,x’\) can possibly have a larger \(f\) value. For binary classification, this means \(Z\) indicates the more positive sample; for regression, \(Z\) indicates the larger target (e.g., the older people of the pair of images). Our goal is to use as few direct label queries as possible.
+Our high-level strategy is to obtain a fully labeled sample pool \(\hat{y}_1,…,\hat{y}_n\), where \(\hat{y}_i\) are either inferred or directly labeled, to feed into a supervised learning algorithm. We will show how such inference can happen, and how the querying process can neatly combine with the learning algorithm for a better performance.
+Our Building Block: Ranking
+Before we go to the algorithms, we first introduce our workhorse: Ranking from pairwise comparisons. We organize the comparisons to induce a ranking over all the samples. After that, we can do efficient inference with a very small amount of direct labels.
+There is a vast amount of literature on ranking from pairwise comparisons, based on different assumptions on the comparison matrix and desired properties. If we have perfect and consistent comparisons, we can use QuickSort (or HeapSort, InsertSort) to rank all \(n\) samples with \(O(n\log n)\) comparisons. If comparisons are noisy and inconsistent, things will be more complicated, but we can still obtain some meaningful rankings. We will not go into more details about ranking since it is out of the scope of this post; we refer interested readers to this survey for more papers on this topic.
+Now let’s suppose we have a ranking over all items. We denote it as \(x_1\prec x_2\prec \cdots\prec x_n\), where \(x_i\prec x_j\) means we think \(f(x_i)\leq f(x_j)\). Note that the actual ranking induced by \(f\) might be different from \(x_1\prec x_2\prec \cdots\prec x_n\), as we can have errors in our comparisons.
+Classification: Binary Search on Ranking
+Now we consider the binary classification problem. If we have a perfect ranking with \begin{align*}f(x_1)\leq f(x_2)\leq \cdots\leq f(x_n),\end{align*} this means the first few samples have labels -1, and then the remaining samples have label +1. Given this specific structure, we would want to find the changing point between negative and positive samples. How are we going to find it?
+Binary search! Since the ranking is in order, we just need \(\log n\) direct label queries to figure out the changing point. Note that this has a specific meaning in the context of classification:  in the standard supervised learning setting, we need at least \(d\) labels to learn a classifier in \(d\) dimension. Now with this ranking information at hand, we only need to find a threshold in a sequence, which is equivalent to learning a classifier in one dimension. Note that in general the comparison queries are cheaper, so our algorithm can save a lot of cost. 
+There are a few more things to note for classification. First is about ties: Suppose our task is to differentiate between cats and dogs. If we are given two cat images, it doesn’t really matter how we rank them since we only care about the threshold between positive and negative samples.
+Secondly, we can combine our algorithm with active learning to save even more label cost. Many active learning algorithms ask about a batch of samples in each round, and we can use our binary search to label each batch. In more detail, we show in our paper the following theorem:
+Theorem (Informal). Suppose each label is correct with probability \(1/2+c\), for a constant \(c\). Then an active learning algorithm would require \(\Omega(d\log(1/\varepsilon))\) direct labels to achieve an error rate of \(\varepsilon\). On the other hand, using binary search on ranking will require \(O(\log(\varepsilon))\) direct labels, and \(O(d\log(d/\varepsilon))\) comparisons.
+Regression: Isotonic Regression
+If we are doing regression, we cannot hope to find a threshold in the ranking, since we need to predict a real number for each label. However, ranking can still help regression through isotonic regression. Given a ranked sequence\begin{align*} f(x_1)\leq f(x_2)\leq\cdots \leq f(x_n) \text{ and } y_i=f(x_i)+\varepsilon_i, \varepsilon_i\sim \mathcal{N}(0,1),\end{align*} the isotonic regression aims to find the solution of\begin{align*}\min_{\hat{y}_i} & \sum_{i=1}^n (\hat{y}_i-y_i)^2\\s.t.& \hat{y}_i\leq \hat{y}_{i+1}, \forall i=1,2,…,n-1.\end{align*}If we use \(y_i\) as our labels, the mean-squared error \(\frac{1}{n}\sum_{i=1}^m (y_i-f(x_i))^2\) will have an expectation of 1, since \(\varepsilon_i\sim \mathcal{N}(0,1)\). Isotonic regression enjoys  \(m^{-2/3}\) statistical rate, which is diminishing as \(n\rightarrow \infty\). For a reference, see (Zhang, 2002).
+The \(m^{-2/3}\) decays faster than the optimal rates of many non-parametric regression problems because it is dimension-independent. Non-parametric methods typically have an error rate of \(m^{-\frac{2}{d+2}}\) given \(m\) labels, the so-called curse of dimensionality (see Tsybakov’s book for an introduction to non-parametric regression). Since the rate of isotonic regression decays much faster than the non-parametric regression problems, we only need a fraction of labels for good accuracy. We leverage this property to design the following algorithm: suppose we only directly query \(m\) labels. While having a ranking over \(n\) points, we can infer the unlabeled samples by just using their nearest labeled points. That is, we query \(y_{t_1},…,y_{t_m}\) and get refined values \(\hat{y}_{t_1},…,\hat{y}_{t_m}\) using the above isotonic regression formulation, we label each point as \(\hat{y}_i=\hat{y}_{t_j}\), where \(i \in 1,…,n\) and \(t_j\) is \(i\)’s nearest neighbor in \(\{t_1,…,t_m\}\).
+In our paper, we analyze this algorithm under the non-parametric regression setting. We have the following theorem:
+Theorem (Informal). Suppose the underlying function \(f\) is Lipschitz. If we use \(m\) direct labels, any algorithm will incur an error of at least \(\Omega\left(m^{-\frac{2}{d+2}}\right)\). If we use isotonic regression with nearest neighbors, the error will be \(m^{-\frac{2}{3}}+n^{-\frac{2}{d}}\), where \(m\) is the number of direct labels, and \(n\) is the number of ranked points. This rate is optimal for any algorithm using \(m\) direct labels and \(n\) ranked points.
+Note the MSE of non-parametric regression using only the labeled samples is \(\Theta(m^{-\frac{2}{d+2}})\) which is exponential in \(d\) and makes non-parametric regression impractical in high-dimensions. Focusing on the dependence on \(m\), our result improves the rate to  \(m^{-2/3}\), which is no longer exponential. Therefore, using the ranking information we can avoid the curse of dimensionality.
+Comparison in Practice
+Now let’s test our algorithm in practice. Our task is to predict the ages of people in images, as aforementioned.  We use the APPA-REAL dataset, with 7,113 images and associated ages. The dataset is suitable for comparisons because it contains both the biological age, as well as the apparent age estimated from human labelers. Suppose our goal is to predict the biological age, and we can simulate comparisons by comparing the apparent ages.
+Our classification task is to judge whether a person is under or over 30 years old.  We compare our method with a base-line active learning method which only uses label queries. Both methods use a linear SVM classifier ( features are extracted from the 128-dimension top layer of FaceNet, an unsupervised method to extract features from faces). The shades represent standard variation over 20 repeats of experiments. The plots show comparisons indeed reduce the number of label queries.
+
+Our regression task is to predict the actual ages, and we compute the mean squared error (MSE) to evaluate different methods. Our label-only baselines are nearest neighbors(NN) methods with 5 or 10 neighbors(5-NN and 10-NN), and support vector regression(SVR). Our methods use 5-NN or 10-NN after we have inferred the labels via isotonic regression. We thus name our methods R\(^2\) 5-NN and R\(^2\) 10-NN. Again, the experiment shows comparisons can reduce the number of label queries.
+
+Future Works
+Of course, binary classification and regression are not the only settings where using comparison information can have a big impact. Using the rank-and-infer approach, we hope to extend these results to multi-class classification, optimization, and reinforcement learning. Feel free to get in touch if you want to learn more!
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of Carnegie Mellon University. 
+
+
+machine learning
+
+
+
+
+♥291
+ 33118
+ 6
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Continuous-Time View of Early Stopping for Least Squares (or: How I Learned to Stop Worrying and Love Early Stopping)
+
+ Representer Point Selection for Explaining Deep Neural Networks
+
+You Might Also Like
+
+
+
+Counterfactual predictions under runtime confounding
+April 16, 2021
+
+
+
+CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+July 3, 2020
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+6 Comments
+
+
+ 
+
+
+Reply 
+Kyle Butler
+March 30, 2019 at 10:32 AM
+Thanks for writing. Not ML fluent, so please excuse vocab. 
+Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? 
+Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+Nikita Popov
+May 5, 2019 at 2:40 PM
+Dear Mr. Xu,
+Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.
+My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.
+If you are interested in discussing this topic, feel free to contact me via email.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+pg2455
+May 13, 2019 at 9:16 AM
+Hi,
+Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+
+machine learning Research
+Building Machine Learning Models via Comparisons
+
+
+Authors
+Yichong Xu 
+
+
+Affiliations
+
+
+Published
+                        March 29, 2019                    
+
+DOI
+
+
+
+
+
+
+
+
+Nowadays most machine learning (ML) models predict labels from features. In classification tasks, an ML model predicts a categorical value and in regression tasks, an ML model predicts a real value. These ML models thus require a large amount of feature-label pairs. While in practice it is not hard to obtain features, it is often costly to obtain labels because this requires human labor. 
+Can we do more? Can we learn a model without too many feature-label pairs? Think of human learning: as humans, we do not need 1,000 cat images and labels “cat” to learn what is a cat or to differentiate cats from dogs. We can also learn the concept through comparisons. When we see a cat/dog, we can compare it with cats we have seen to decide whether we should label it “cat”.
+Our recent papers (1,2) focus on using comparisons to build ML models. The idea of using comparisons is based on a classical psychological observation: It is easier for people to compare between items than evaluate each item alone. For example, what is the age of the man in the image?
+
+Not very easy, right? Is he 20, 30 or 40? We can probably say he is not very old, but it is just hard to be very accurate on the exact age. Now, which person in the two images is older?
+
+Now based on the wrinkles and silver hair, you can probably quickly judge that the second man is older. 
+This phenomenon is not only present for this task, but also in many other real-world applications. For example, to diagnose patients, it is usually more difficult to directly label each patient with a kind of disease by experimental tests, but easier to compare the physical conditions of two patients. In material synthesis,  measuring the characteristics of a material usually requires expensive tests, but comparisons are relatively easy through simulations. For movie ratings, it is often hard for us to give scores for a specific movie, but easier to pick our favorite among a list of movies.
+So how can we build ML models using comparisons? Here we describe an approach that uses comparisons to do inferences on the unlabeled samples and feed inferred labels into existing models. Below we will look at two ways for such inference, for classification and regression respectively.
+The Setup
+As described above, our setup starts with a set of unlabeled features \(x_1, x_2,…, x_n\), drawn independently and identically distributed (i.i.d.) from a feature distribution \(X\sim P_X\). Let the data dimension be \(d\). Our goal is to learn a function \(f: \mathbb{R}^d \rightarrow \mathcal{Y}\), where \(\mathcal{Y}\) is the label space. For example, for binary classification \(\mathcal{Y}=\{1, -1\}\), and for regression \(\mathcal{Y}=\mathbb{R}\).
+We assume we can query either direct labels or pairwise comparisons. The direct label \(Y(x)\) is a (possibly noisy) version of \(f(x)\). The comparison \(Z\) is based on a pair of samples \(x,x’\) and indicates which one of \(x,x’\) can possibly have a larger \(f\) value. For binary classification, this means \(Z\) indicates the more positive sample; for regression, \(Z\) indicates the larger target (e.g., the older people of the pair of images). Our goal is to use as few direct label queries as possible.
+Our high-level strategy is to obtain a fully labeled sample pool \(\hat{y}_1,…,\hat{y}_n\), where \(\hat{y}_i\) are either inferred or directly labeled, to feed into a supervised learning algorithm. We will show how such inference can happen, and how the querying process can neatly combine with the learning algorithm for a better performance.
+Our Building Block: Ranking
+Before we go to the algorithms, we first introduce our workhorse: Ranking from pairwise comparisons. We organize the comparisons to induce a ranking over all the samples. After that, we can do efficient inference with a very small amount of direct labels.
+There is a vast amount of literature on ranking from pairwise comparisons, based on different assumptions on the comparison matrix and desired properties. If we have perfect and consistent comparisons, we can use QuickSort (or HeapSort, InsertSort) to rank all \(n\) samples with \(O(n\log n)\) comparisons. If comparisons are noisy and inconsistent, things will be more complicated, but we can still obtain some meaningful rankings. We will not go into more details about ranking since it is out of the scope of this post; we refer interested readers to this survey for more papers on this topic.
+Now let’s suppose we have a ranking over all items. We denote it as \(x_1\prec x_2\prec \cdots\prec x_n\), where \(x_i\prec x_j\) means we think \(f(x_i)\leq f(x_j)\). Note that the actual ranking induced by \(f\) might be different from \(x_1\prec x_2\prec \cdots\prec x_n\), as we can have errors in our comparisons.
+Classification: Binary Search on Ranking
+Now we consider the binary classification problem. If we have a perfect ranking with \begin{align*}f(x_1)\leq f(x_2)\leq \cdots\leq f(x_n),\end{align*} this means the first few samples have labels -1, and then the remaining samples have label +1. Given this specific structure, we would want to find the changing point between negative and positive samples. How are we going to find it?
+Binary search! Since the ranking is in order, we just need \(\log n\) direct label queries to figure out the changing point. Note that this has a specific meaning in the context of classification:  in the standard supervised learning setting, we need at least \(d\) labels to learn a classifier in \(d\) dimension. Now with this ranking information at hand, we only need to find a threshold in a sequence, which is equivalent to learning a classifier in one dimension. Note that in general the comparison queries are cheaper, so our algorithm can save a lot of cost. 
+There are a few more things to note for classification. First is about ties: Suppose our task is to differentiate between cats and dogs. If we are given two cat images, it doesn’t really matter how we rank them since we only care about the threshold between positive and negative samples.
+Secondly, we can combine our algorithm with active learning to save even more label cost. Many active learning algorithms ask about a batch of samples in each round, and we can use our binary search to label each batch. In more detail, we show in our paper the following theorem:
+Theorem (Informal). Suppose each label is correct with probability \(1/2+c\), for a constant \(c\). Then an active learning algorithm would require \(\Omega(d\log(1/\varepsilon))\) direct labels to achieve an error rate of \(\varepsilon\). On the other hand, using binary search on ranking will require \(O(\log(\varepsilon))\) direct labels, and \(O(d\log(d/\varepsilon))\) comparisons.
+Regression: Isotonic Regression
+If we are doing regression, we cannot hope to find a threshold in the ranking, since we need to predict a real number for each label. However, ranking can still help regression through isotonic regression. Given a ranked sequence\begin{align*} f(x_1)\leq f(x_2)\leq\cdots \leq f(x_n) \text{ and } y_i=f(x_i)+\varepsilon_i, \varepsilon_i\sim \mathcal{N}(0,1),\end{align*} the isotonic regression aims to find the solution of\begin{align*}\min_{\hat{y}_i} & \sum_{i=1}^n (\hat{y}_i-y_i)^2\\s.t.& \hat{y}_i\leq \hat{y}_{i+1}, \forall i=1,2,…,n-1.\end{align*}If we use \(y_i\) as our labels, the mean-squared error \(\frac{1}{n}\sum_{i=1}^m (y_i-f(x_i))^2\) will have an expectation of 1, since \(\varepsilon_i\sim \mathcal{N}(0,1)\). Isotonic regression enjoys  \(m^{-2/3}\) statistical rate, which is diminishing as \(n\rightarrow \infty\). For a reference, see (Zhang, 2002).
+The \(m^{-2/3}\) decays faster than the optimal rates of many non-parametric regression problems because it is dimension-independent. Non-parametric methods typically have an error rate of \(m^{-\frac{2}{d+2}}\) given \(m\) labels, the so-called curse of dimensionality (see Tsybakov’s book for an introduction to non-parametric regression). Since the rate of isotonic regression decays much faster than the non-parametric regression problems, we only need a fraction of labels for good accuracy. We leverage this property to design the following algorithm: suppose we only directly query \(m\) labels. While having a ranking over \(n\) points, we can infer the unlabeled samples by just using their nearest labeled points. That is, we query \(y_{t_1},…,y_{t_m}\) and get refined values \(\hat{y}_{t_1},…,\hat{y}_{t_m}\) using the above isotonic regression formulation, we label each point as \(\hat{y}_i=\hat{y}_{t_j}\), where \(i \in 1,…,n\) and \(t_j\) is \(i\)’s nearest neighbor in \(\{t_1,…,t_m\}\).
+In our paper, we analyze this algorithm under the non-parametric regression setting. We have the following theorem:
+Theorem (Informal). Suppose the underlying function \(f\) is Lipschitz. If we use \(m\) direct labels, any algorithm will incur an error of at least \(\Omega\left(m^{-\frac{2}{d+2}}\right)\). If we use isotonic regression with nearest neighbors, the error will be \(m^{-\frac{2}{3}}+n^{-\frac{2}{d}}\), where \(m\) is the number of direct labels, and \(n\) is the number of ranked points. This rate is optimal for any algorithm using \(m\) direct labels and \(n\) ranked points.
+Note the MSE of non-parametric regression using only the labeled samples is \(\Theta(m^{-\frac{2}{d+2}})\) which is exponential in \(d\) and makes non-parametric regression impractical in high-dimensions. Focusing on the dependence on \(m\), our result improves the rate to  \(m^{-2/3}\), which is no longer exponential. Therefore, using the ranking information we can avoid the curse of dimensionality.
+Comparison in Practice
+Now let’s test our algorithm in practice. Our task is to predict the ages of people in images, as aforementioned.  We use the APPA-REAL dataset, with 7,113 images and associated ages. The dataset is suitable for comparisons because it contains both the biological age, as well as the apparent age estimated from human labelers. Suppose our goal is to predict the biological age, and we can simulate comparisons by comparing the apparent ages.
+Our classification task is to judge whether a person is under or over 30 years old.  We compare our method with a base-line active learning method which only uses label queries. Both methods use a linear SVM classifier ( features are extracted from the 128-dimension top layer of FaceNet, an unsupervised method to extract features from faces). The shades represent standard variation over 20 repeats of experiments. The plots show comparisons indeed reduce the number of label queries.
+
+Our regression task is to predict the actual ages, and we compute the mean squared error (MSE) to evaluate different methods. Our label-only baselines are nearest neighbors(NN) methods with 5 or 10 neighbors(5-NN and 10-NN), and support vector regression(SVR). Our methods use 5-NN or 10-NN after we have inferred the labels via isotonic regression. We thus name our methods R\(^2\) 5-NN and R\(^2\) 10-NN. Again, the experiment shows comparisons can reduce the number of label queries.
+
+Future Works
+Of course, binary classification and regression are not the only settings where using comparison information can have a big impact. Using the rank-and-infer approach, we hope to extend these results to multi-class classification, optimization, and reinforcement learning. Feel free to get in touch if you want to learn more!
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of Carnegie Mellon University. 
+
+
+machine learning
+
+
+
+
+♥291
+ 33118
+ 6
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Continuous-Time View of Early Stopping for Least Squares (or: How I Learned to Stop Worrying and Love Early Stopping)
+
+ Representer Point Selection for Explaining Deep Neural Networks
+
+You Might Also Like
+
+
+
+Counterfactual predictions under runtime confounding
+April 16, 2021
+
+
+
+CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+July 3, 2020
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+6 Comments
+
+
+ 
+
+
+Reply 
+Kyle Butler
+March 30, 2019 at 10:32 AM
+Thanks for writing. Not ML fluent, so please excuse vocab. 
+Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? 
+Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+Nikita Popov
+May 5, 2019 at 2:40 PM
+Dear Mr. Xu,
+Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.
+My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.
+If you are interested in discussing this topic, feel free to contact me via email.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+pg2455
+May 13, 2019 at 9:16 AM
+Hi,
+Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+machine learning Research
+Building Machine Learning Models via Comparisons
+
+
+Authors
+Yichong Xu 
+
+
+Affiliations
+
+
+Published
+                        March 29, 2019                    
+
+DOI
+
+
+
+
+
+
+
+
+Nowadays most machine learning (ML) models predict labels from features. In classification tasks, an ML model predicts a categorical value and in regression tasks, an ML model predicts a real value. These ML models thus require a large amount of feature-label pairs. While in practice it is not hard to obtain features, it is often costly to obtain labels because this requires human labor. 
+Can we do more? Can we learn a model without too many feature-label pairs? Think of human learning: as humans, we do not need 1,000 cat images and labels “cat” to learn what is a cat or to differentiate cats from dogs. We can also learn the concept through comparisons. When we see a cat/dog, we can compare it with cats we have seen to decide whether we should label it “cat”.
+Our recent papers (1,2) focus on using comparisons to build ML models. The idea of using comparisons is based on a classical psychological observation: It is easier for people to compare between items than evaluate each item alone. For example, what is the age of the man in the image?
+
+Not very easy, right? Is he 20, 30 or 40? We can probably say he is not very old, but it is just hard to be very accurate on the exact age. Now, which person in the two images is older?
+
+Now based on the wrinkles and silver hair, you can probably quickly judge that the second man is older. 
+This phenomenon is not only present for this task, but also in many other real-world applications. For example, to diagnose patients, it is usually more difficult to directly label each patient with a kind of disease by experimental tests, but easier to compare the physical conditions of two patients. In material synthesis,  measuring the characteristics of a material usually requires expensive tests, but comparisons are relatively easy through simulations. For movie ratings, it is often hard for us to give scores for a specific movie, but easier to pick our favorite among a list of movies.
+So how can we build ML models using comparisons? Here we describe an approach that uses comparisons to do inferences on the unlabeled samples and feed inferred labels into existing models. Below we will look at two ways for such inference, for classification and regression respectively.
+The Setup
+As described above, our setup starts with a set of unlabeled features \(x_1, x_2,…, x_n\), drawn independently and identically distributed (i.i.d.) from a feature distribution \(X\sim P_X\). Let the data dimension be \(d\). Our goal is to learn a function \(f: \mathbb{R}^d \rightarrow \mathcal{Y}\), where \(\mathcal{Y}\) is the label space. For example, for binary classification \(\mathcal{Y}=\{1, -1\}\), and for regression \(\mathcal{Y}=\mathbb{R}\).
+We assume we can query either direct labels or pairwise comparisons. The direct label \(Y(x)\) is a (possibly noisy) version of \(f(x)\). The comparison \(Z\) is based on a pair of samples \(x,x’\) and indicates which one of \(x,x’\) can possibly have a larger \(f\) value. For binary classification, this means \(Z\) indicates the more positive sample; for regression, \(Z\) indicates the larger target (e.g., the older people of the pair of images). Our goal is to use as few direct label queries as possible.
+Our high-level strategy is to obtain a fully labeled sample pool \(\hat{y}_1,…,\hat{y}_n\), where \(\hat{y}_i\) are either inferred or directly labeled, to feed into a supervised learning algorithm. We will show how such inference can happen, and how the querying process can neatly combine with the learning algorithm for a better performance.
+Our Building Block: Ranking
+Before we go to the algorithms, we first introduce our workhorse: Ranking from pairwise comparisons. We organize the comparisons to induce a ranking over all the samples. After that, we can do efficient inference with a very small amount of direct labels.
+There is a vast amount of literature on ranking from pairwise comparisons, based on different assumptions on the comparison matrix and desired properties. If we have perfect and consistent comparisons, we can use QuickSort (or HeapSort, InsertSort) to rank all \(n\) samples with \(O(n\log n)\) comparisons. If comparisons are noisy and inconsistent, things will be more complicated, but we can still obtain some meaningful rankings. We will not go into more details about ranking since it is out of the scope of this post; we refer interested readers to this survey for more papers on this topic.
+Now let’s suppose we have a ranking over all items. We denote it as \(x_1\prec x_2\prec \cdots\prec x_n\), where \(x_i\prec x_j\) means we think \(f(x_i)\leq f(x_j)\). Note that the actual ranking induced by \(f\) might be different from \(x_1\prec x_2\prec \cdots\prec x_n\), as we can have errors in our comparisons.
+Classification: Binary Search on Ranking
+Now we consider the binary classification problem. If we have a perfect ranking with \begin{align*}f(x_1)\leq f(x_2)\leq \cdots\leq f(x_n),\end{align*} this means the first few samples have labels -1, and then the remaining samples have label +1. Given this specific structure, we would want to find the changing point between negative and positive samples. How are we going to find it?
+Binary search! Since the ranking is in order, we just need \(\log n\) direct label queries to figure out the changing point. Note that this has a specific meaning in the context of classification:  in the standard supervised learning setting, we need at least \(d\) labels to learn a classifier in \(d\) dimension. Now with this ranking information at hand, we only need to find a threshold in a sequence, which is equivalent to learning a classifier in one dimension. Note that in general the comparison queries are cheaper, so our algorithm can save a lot of cost. 
+There are a few more things to note for classification. First is about ties: Suppose our task is to differentiate between cats and dogs. If we are given two cat images, it doesn’t really matter how we rank them since we only care about the threshold between positive and negative samples.
+Secondly, we can combine our algorithm with active learning to save even more label cost. Many active learning algorithms ask about a batch of samples in each round, and we can use our binary search to label each batch. In more detail, we show in our paper the following theorem:
+Theorem (Informal). Suppose each label is correct with probability \(1/2+c\), for a constant \(c\). Then an active learning algorithm would require \(\Omega(d\log(1/\varepsilon))\) direct labels to achieve an error rate of \(\varepsilon\). On the other hand, using binary search on ranking will require \(O(\log(\varepsilon))\) direct labels, and \(O(d\log(d/\varepsilon))\) comparisons.
+Regression: Isotonic Regression
+If we are doing regression, we cannot hope to find a threshold in the ranking, since we need to predict a real number for each label. However, ranking can still help regression through isotonic regression. Given a ranked sequence\begin{align*} f(x_1)\leq f(x_2)\leq\cdots \leq f(x_n) \text{ and } y_i=f(x_i)+\varepsilon_i, \varepsilon_i\sim \mathcal{N}(0,1),\end{align*} the isotonic regression aims to find the solution of\begin{align*}\min_{\hat{y}_i} & \sum_{i=1}^n (\hat{y}_i-y_i)^2\\s.t.& \hat{y}_i\leq \hat{y}_{i+1}, \forall i=1,2,…,n-1.\end{align*}If we use \(y_i\) as our labels, the mean-squared error \(\frac{1}{n}\sum_{i=1}^m (y_i-f(x_i))^2\) will have an expectation of 1, since \(\varepsilon_i\sim \mathcal{N}(0,1)\). Isotonic regression enjoys  \(m^{-2/3}\) statistical rate, which is diminishing as \(n\rightarrow \infty\). For a reference, see (Zhang, 2002).
+The \(m^{-2/3}\) decays faster than the optimal rates of many non-parametric regression problems because it is dimension-independent. Non-parametric methods typically have an error rate of \(m^{-\frac{2}{d+2}}\) given \(m\) labels, the so-called curse of dimensionality (see Tsybakov’s book for an introduction to non-parametric regression). Since the rate of isotonic regression decays much faster than the non-parametric regression problems, we only need a fraction of labels for good accuracy. We leverage this property to design the following algorithm: suppose we only directly query \(m\) labels. While having a ranking over \(n\) points, we can infer the unlabeled samples by just using their nearest labeled points. That is, we query \(y_{t_1},…,y_{t_m}\) and get refined values \(\hat{y}_{t_1},…,\hat{y}_{t_m}\) using the above isotonic regression formulation, we label each point as \(\hat{y}_i=\hat{y}_{t_j}\), where \(i \in 1,…,n\) and \(t_j\) is \(i\)’s nearest neighbor in \(\{t_1,…,t_m\}\).
+In our paper, we analyze this algorithm under the non-parametric regression setting. We have the following theorem:
+Theorem (Informal). Suppose the underlying function \(f\) is Lipschitz. If we use \(m\) direct labels, any algorithm will incur an error of at least \(\Omega\left(m^{-\frac{2}{d+2}}\right)\). If we use isotonic regression with nearest neighbors, the error will be \(m^{-\frac{2}{3}}+n^{-\frac{2}{d}}\), where \(m\) is the number of direct labels, and \(n\) is the number of ranked points. This rate is optimal for any algorithm using \(m\) direct labels and \(n\) ranked points.
+Note the MSE of non-parametric regression using only the labeled samples is \(\Theta(m^{-\frac{2}{d+2}})\) which is exponential in \(d\) and makes non-parametric regression impractical in high-dimensions. Focusing on the dependence on \(m\), our result improves the rate to  \(m^{-2/3}\), which is no longer exponential. Therefore, using the ranking information we can avoid the curse of dimensionality.
+Comparison in Practice
+Now let’s test our algorithm in practice. Our task is to predict the ages of people in images, as aforementioned.  We use the APPA-REAL dataset, with 7,113 images and associated ages. The dataset is suitable for comparisons because it contains both the biological age, as well as the apparent age estimated from human labelers. Suppose our goal is to predict the biological age, and we can simulate comparisons by comparing the apparent ages.
+Our classification task is to judge whether a person is under or over 30 years old.  We compare our method with a base-line active learning method which only uses label queries. Both methods use a linear SVM classifier ( features are extracted from the 128-dimension top layer of FaceNet, an unsupervised method to extract features from faces). The shades represent standard variation over 20 repeats of experiments. The plots show comparisons indeed reduce the number of label queries.
+
+Our regression task is to predict the actual ages, and we compute the mean squared error (MSE) to evaluate different methods. Our label-only baselines are nearest neighbors(NN) methods with 5 or 10 neighbors(5-NN and 10-NN), and support vector regression(SVR). Our methods use 5-NN or 10-NN after we have inferred the labels via isotonic regression. We thus name our methods R\(^2\) 5-NN and R\(^2\) 10-NN. Again, the experiment shows comparisons can reduce the number of label queries.
+
+Future Works
+Of course, binary classification and regression are not the only settings where using comparison information can have a big impact. Using the rank-and-infer approach, we hope to extend these results to multi-class classification, optimization, and reinforcement learning. Feel free to get in touch if you want to learn more!
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of Carnegie Mellon University. 
+
+
+machine learning
+
+
+
+
+♥291
+ 33118
+ 6
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Continuous-Time View of Early Stopping for Least Squares (or: How I Learned to Stop Worrying and Love Early Stopping)
+
+ Representer Point Selection for Explaining Deep Neural Networks
+
+You Might Also Like
+
+
+
+Counterfactual predictions under runtime confounding
+April 16, 2021
+
+
+
+CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+July 3, 2020
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+6 Comments
+
+
+ 
+
+
+Reply 
+Kyle Butler
+March 30, 2019 at 10:32 AM
+Thanks for writing. Not ML fluent, so please excuse vocab. 
+Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? 
+Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+Nikita Popov
+May 5, 2019 at 2:40 PM
+Dear Mr. Xu,
+Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.
+My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.
+If you are interested in discussing this topic, feel free to contact me via email.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+pg2455
+May 13, 2019 at 9:16 AM
+Hi,
+Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+machine learning Research
+Building Machine Learning Models via Comparisons
+
+
+Authors
+Yichong Xu 
+
+
+Affiliations
+
+
+Published
+                        March 29, 2019                    
+
+DOI
+
+
+
+
+
+
+
+
+Nowadays most machine learning (ML) models predict labels from features. In classification tasks, an ML model predicts a categorical value and in regression tasks, an ML model predicts a real value. These ML models thus require a large amount of feature-label pairs. While in practice it is not hard to obtain features, it is often costly to obtain labels because this requires human labor. 
+Can we do more? Can we learn a model without too many feature-label pairs? Think of human learning: as humans, we do not need 1,000 cat images and labels “cat” to learn what is a cat or to differentiate cats from dogs. We can also learn the concept through comparisons. When we see a cat/dog, we can compare it with cats we have seen to decide whether we should label it “cat”.
+Our recent papers (1,2) focus on using comparisons to build ML models. The idea of using comparisons is based on a classical psychological observation: It is easier for people to compare between items than evaluate each item alone. For example, what is the age of the man in the image?
+
+Not very easy, right? Is he 20, 30 or 40? We can probably say he is not very old, but it is just hard to be very accurate on the exact age. Now, which person in the two images is older?
+
+Now based on the wrinkles and silver hair, you can probably quickly judge that the second man is older. 
+This phenomenon is not only present for this task, but also in many other real-world applications. For example, to diagnose patients, it is usually more difficult to directly label each patient with a kind of disease by experimental tests, but easier to compare the physical conditions of two patients. In material synthesis,  measuring the characteristics of a material usually requires expensive tests, but comparisons are relatively easy through simulations. For movie ratings, it is often hard for us to give scores for a specific movie, but easier to pick our favorite among a list of movies.
+So how can we build ML models using comparisons? Here we describe an approach that uses comparisons to do inferences on the unlabeled samples and feed inferred labels into existing models. Below we will look at two ways for such inference, for classification and regression respectively.
+The Setup
+As described above, our setup starts with a set of unlabeled features \(x_1, x_2,…, x_n\), drawn independently and identically distributed (i.i.d.) from a feature distribution \(X\sim P_X\). Let the data dimension be \(d\). Our goal is to learn a function \(f: \mathbb{R}^d \rightarrow \mathcal{Y}\), where \(\mathcal{Y}\) is the label space. For example, for binary classification \(\mathcal{Y}=\{1, -1\}\), and for regression \(\mathcal{Y}=\mathbb{R}\).
+We assume we can query either direct labels or pairwise comparisons. The direct label \(Y(x)\) is a (possibly noisy) version of \(f(x)\). The comparison \(Z\) is based on a pair of samples \(x,x’\) and indicates which one of \(x,x’\) can possibly have a larger \(f\) value. For binary classification, this means \(Z\) indicates the more positive sample; for regression, \(Z\) indicates the larger target (e.g., the older people of the pair of images). Our goal is to use as few direct label queries as possible.
+Our high-level strategy is to obtain a fully labeled sample pool \(\hat{y}_1,…,\hat{y}_n\), where \(\hat{y}_i\) are either inferred or directly labeled, to feed into a supervised learning algorithm. We will show how such inference can happen, and how the querying process can neatly combine with the learning algorithm for a better performance.
+Our Building Block: Ranking
+Before we go to the algorithms, we first introduce our workhorse: Ranking from pairwise comparisons. We organize the comparisons to induce a ranking over all the samples. After that, we can do efficient inference with a very small amount of direct labels.
+There is a vast amount of literature on ranking from pairwise comparisons, based on different assumptions on the comparison matrix and desired properties. If we have perfect and consistent comparisons, we can use QuickSort (or HeapSort, InsertSort) to rank all \(n\) samples with \(O(n\log n)\) comparisons. If comparisons are noisy and inconsistent, things will be more complicated, but we can still obtain some meaningful rankings. We will not go into more details about ranking since it is out of the scope of this post; we refer interested readers to this survey for more papers on this topic.
+Now let’s suppose we have a ranking over all items. We denote it as \(x_1\prec x_2\prec \cdots\prec x_n\), where \(x_i\prec x_j\) means we think \(f(x_i)\leq f(x_j)\). Note that the actual ranking induced by \(f\) might be different from \(x_1\prec x_2\prec \cdots\prec x_n\), as we can have errors in our comparisons.
+Classification: Binary Search on Ranking
+Now we consider the binary classification problem. If we have a perfect ranking with \begin{align*}f(x_1)\leq f(x_2)\leq \cdots\leq f(x_n),\end{align*} this means the first few samples have labels -1, and then the remaining samples have label +1. Given this specific structure, we would want to find the changing point between negative and positive samples. How are we going to find it?
+Binary search! Since the ranking is in order, we just need \(\log n\) direct label queries to figure out the changing point. Note that this has a specific meaning in the context of classification:  in the standard supervised learning setting, we need at least \(d\) labels to learn a classifier in \(d\) dimension. Now with this ranking information at hand, we only need to find a threshold in a sequence, which is equivalent to learning a classifier in one dimension. Note that in general the comparison queries are cheaper, so our algorithm can save a lot of cost. 
+There are a few more things to note for classification. First is about ties: Suppose our task is to differentiate between cats and dogs. If we are given two cat images, it doesn’t really matter how we rank them since we only care about the threshold between positive and negative samples.
+Secondly, we can combine our algorithm with active learning to save even more label cost. Many active learning algorithms ask about a batch of samples in each round, and we can use our binary search to label each batch. In more detail, we show in our paper the following theorem:
+Theorem (Informal). Suppose each label is correct with probability \(1/2+c\), for a constant \(c\). Then an active learning algorithm would require \(\Omega(d\log(1/\varepsilon))\) direct labels to achieve an error rate of \(\varepsilon\). On the other hand, using binary search on ranking will require \(O(\log(\varepsilon))\) direct labels, and \(O(d\log(d/\varepsilon))\) comparisons.
+Regression: Isotonic Regression
+If we are doing regression, we cannot hope to find a threshold in the ranking, since we need to predict a real number for each label. However, ranking can still help regression through isotonic regression. Given a ranked sequence\begin{align*} f(x_1)\leq f(x_2)\leq\cdots \leq f(x_n) \text{ and } y_i=f(x_i)+\varepsilon_i, \varepsilon_i\sim \mathcal{N}(0,1),\end{align*} the isotonic regression aims to find the solution of\begin{align*}\min_{\hat{y}_i} & \sum_{i=1}^n (\hat{y}_i-y_i)^2\\s.t.& \hat{y}_i\leq \hat{y}_{i+1}, \forall i=1,2,…,n-1.\end{align*}If we use \(y_i\) as our labels, the mean-squared error \(\frac{1}{n}\sum_{i=1}^m (y_i-f(x_i))^2\) will have an expectation of 1, since \(\varepsilon_i\sim \mathcal{N}(0,1)\). Isotonic regression enjoys  \(m^{-2/3}\) statistical rate, which is diminishing as \(n\rightarrow \infty\). For a reference, see (Zhang, 2002).
+The \(m^{-2/3}\) decays faster than the optimal rates of many non-parametric regression problems because it is dimension-independent. Non-parametric methods typically have an error rate of \(m^{-\frac{2}{d+2}}\) given \(m\) labels, the so-called curse of dimensionality (see Tsybakov’s book for an introduction to non-parametric regression). Since the rate of isotonic regression decays much faster than the non-parametric regression problems, we only need a fraction of labels for good accuracy. We leverage this property to design the following algorithm: suppose we only directly query \(m\) labels. While having a ranking over \(n\) points, we can infer the unlabeled samples by just using their nearest labeled points. That is, we query \(y_{t_1},…,y_{t_m}\) and get refined values \(\hat{y}_{t_1},…,\hat{y}_{t_m}\) using the above isotonic regression formulation, we label each point as \(\hat{y}_i=\hat{y}_{t_j}\), where \(i \in 1,…,n\) and \(t_j\) is \(i\)’s nearest neighbor in \(\{t_1,…,t_m\}\).
+In our paper, we analyze this algorithm under the non-parametric regression setting. We have the following theorem:
+Theorem (Informal). Suppose the underlying function \(f\) is Lipschitz. If we use \(m\) direct labels, any algorithm will incur an error of at least \(\Omega\left(m^{-\frac{2}{d+2}}\right)\). If we use isotonic regression with nearest neighbors, the error will be \(m^{-\frac{2}{3}}+n^{-\frac{2}{d}}\), where \(m\) is the number of direct labels, and \(n\) is the number of ranked points. This rate is optimal for any algorithm using \(m\) direct labels and \(n\) ranked points.
+Note the MSE of non-parametric regression using only the labeled samples is \(\Theta(m^{-\frac{2}{d+2}})\) which is exponential in \(d\) and makes non-parametric regression impractical in high-dimensions. Focusing on the dependence on \(m\), our result improves the rate to  \(m^{-2/3}\), which is no longer exponential. Therefore, using the ranking information we can avoid the curse of dimensionality.
+Comparison in Practice
+Now let’s test our algorithm in practice. Our task is to predict the ages of people in images, as aforementioned.  We use the APPA-REAL dataset, with 7,113 images and associated ages. The dataset is suitable for comparisons because it contains both the biological age, as well as the apparent age estimated from human labelers. Suppose our goal is to predict the biological age, and we can simulate comparisons by comparing the apparent ages.
+Our classification task is to judge whether a person is under or over 30 years old.  We compare our method with a base-line active learning method which only uses label queries. Both methods use a linear SVM classifier ( features are extracted from the 128-dimension top layer of FaceNet, an unsupervised method to extract features from faces). The shades represent standard variation over 20 repeats of experiments. The plots show comparisons indeed reduce the number of label queries.
+
+Our regression task is to predict the actual ages, and we compute the mean squared error (MSE) to evaluate different methods. Our label-only baselines are nearest neighbors(NN) methods with 5 or 10 neighbors(5-NN and 10-NN), and support vector regression(SVR). Our methods use 5-NN or 10-NN after we have inferred the labels via isotonic regression. We thus name our methods R\(^2\) 5-NN and R\(^2\) 10-NN. Again, the experiment shows comparisons can reduce the number of label queries.
+
+Future Works
+Of course, binary classification and regression are not the only settings where using comparison information can have a big impact. Using the rank-and-infer approach, we hope to extend these results to multi-class classification, optimization, and reinforcement learning. Feel free to get in touch if you want to learn more!
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of Carnegie Mellon University. 
+
+
+machine learning
+
+
+
+
+♥291
+ 33118
+ 6
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Continuous-Time View of Early Stopping for Least Squares (or: How I Learned to Stop Worrying and Love Early Stopping)
+
+ Representer Point Selection for Explaining Deep Neural Networks
+
+You Might Also Like
+
+
+
+Counterfactual predictions under runtime confounding
+April 16, 2021
+
+
+
+CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+July 3, 2020
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+6 Comments
+
+
+ 
+
+
+Reply 
+Kyle Butler
+March 30, 2019 at 10:32 AM
+Thanks for writing. Not ML fluent, so please excuse vocab. 
+Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? 
+Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+Nikita Popov
+May 5, 2019 at 2:40 PM
+Dear Mr. Xu,
+Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.
+My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.
+If you are interested in discussing this topic, feel free to contact me via email.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+pg2455
+May 13, 2019 at 9:16 AM
+Hi,
+Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+machine learning Research
+Building Machine Learning Models via Comparisons
+
+
+Authors
+Yichong Xu 
+
+
+Affiliations
+
+
+Published
+                        March 29, 2019                    
+
+DOI
+
+
+
+
+Authors
+Yichong Xu 
+
+
+Affiliations
+
+
+Published
+                        March 29, 2019                    
+
+DOI
+
+
+Authors
+Yichong Xu 
+Affiliations
+
+Published
+                        March 29, 2019                    
+DOI
+
+
+
+
+Nowadays most machine learning (ML) models predict labels from features. In classification tasks, an ML model predicts a categorical value and in regression tasks, an ML model predicts a real value. These ML models thus require a large amount of feature-label pairs. While in practice it is not hard to obtain features, it is often costly to obtain labels because this requires human labor. 
+Can we do more? Can we learn a model without too many feature-label pairs? Think of human learning: as humans, we do not need 1,000 cat images and labels “cat” to learn what is a cat or to differentiate cats from dogs. We can also learn the concept through comparisons. When we see a cat/dog, we can compare it with cats we have seen to decide whether we should label it “cat”.
+Our recent papers (1,2) focus on using comparisons to build ML models. The idea of using comparisons is based on a classical psychological observation: It is easier for people to compare between items than evaluate each item alone. For example, what is the age of the man in the image?
+
+Not very easy, right? Is he 20, 30 or 40? We can probably say he is not very old, but it is just hard to be very accurate on the exact age. Now, which person in the two images is older?
+
+Now based on the wrinkles and silver hair, you can probably quickly judge that the second man is older. 
+This phenomenon is not only present for this task, but also in many other real-world applications. For example, to diagnose patients, it is usually more difficult to directly label each patient with a kind of disease by experimental tests, but easier to compare the physical conditions of two patients. In material synthesis,  measuring the characteristics of a material usually requires expensive tests, but comparisons are relatively easy through simulations. For movie ratings, it is often hard for us to give scores for a specific movie, but easier to pick our favorite among a list of movies.
+So how can we build ML models using comparisons? Here we describe an approach that uses comparisons to do inferences on the unlabeled samples and feed inferred labels into existing models. Below we will look at two ways for such inference, for classification and regression respectively.
+The Setup
+As described above, our setup starts with a set of unlabeled features \(x_1, x_2,…, x_n\), drawn independently and identically distributed (i.i.d.) from a feature distribution \(X\sim P_X\). Let the data dimension be \(d\). Our goal is to learn a function \(f: \mathbb{R}^d \rightarrow \mathcal{Y}\), where \(\mathcal{Y}\) is the label space. For example, for binary classification \(\mathcal{Y}=\{1, -1\}\), and for regression \(\mathcal{Y}=\mathbb{R}\).
+We assume we can query either direct labels or pairwise comparisons. The direct label \(Y(x)\) is a (possibly noisy) version of \(f(x)\). The comparison \(Z\) is based on a pair of samples \(x,x’\) and indicates which one of \(x,x’\) can possibly have a larger \(f\) value. For binary classification, this means \(Z\) indicates the more positive sample; for regression, \(Z\) indicates the larger target (e.g., the older people of the pair of images). Our goal is to use as few direct label queries as possible.
+Our high-level strategy is to obtain a fully labeled sample pool \(\hat{y}_1,…,\hat{y}_n\), where \(\hat{y}_i\) are either inferred or directly labeled, to feed into a supervised learning algorithm. We will show how such inference can happen, and how the querying process can neatly combine with the learning algorithm for a better performance.
+Our Building Block: Ranking
+Before we go to the algorithms, we first introduce our workhorse: Ranking from pairwise comparisons. We organize the comparisons to induce a ranking over all the samples. After that, we can do efficient inference with a very small amount of direct labels.
+There is a vast amount of literature on ranking from pairwise comparisons, based on different assumptions on the comparison matrix and desired properties. If we have perfect and consistent comparisons, we can use QuickSort (or HeapSort, InsertSort) to rank all \(n\) samples with \(O(n\log n)\) comparisons. If comparisons are noisy and inconsistent, things will be more complicated, but we can still obtain some meaningful rankings. We will not go into more details about ranking since it is out of the scope of this post; we refer interested readers to this survey for more papers on this topic.
+Now let’s suppose we have a ranking over all items. We denote it as \(x_1\prec x_2\prec \cdots\prec x_n\), where \(x_i\prec x_j\) means we think \(f(x_i)\leq f(x_j)\). Note that the actual ranking induced by \(f\) might be different from \(x_1\prec x_2\prec \cdots\prec x_n\), as we can have errors in our comparisons.
+Classification: Binary Search on Ranking
+Now we consider the binary classification problem. If we have a perfect ranking with \begin{align*}f(x_1)\leq f(x_2)\leq \cdots\leq f(x_n),\end{align*} this means the first few samples have labels -1, and then the remaining samples have label +1. Given this specific structure, we would want to find the changing point between negative and positive samples. How are we going to find it?
+Binary search! Since the ranking is in order, we just need \(\log n\) direct label queries to figure out the changing point. Note that this has a specific meaning in the context of classification:  in the standard supervised learning setting, we need at least \(d\) labels to learn a classifier in \(d\) dimension. Now with this ranking information at hand, we only need to find a threshold in a sequence, which is equivalent to learning a classifier in one dimension. Note that in general the comparison queries are cheaper, so our algorithm can save a lot of cost. 
+There are a few more things to note for classification. First is about ties: Suppose our task is to differentiate between cats and dogs. If we are given two cat images, it doesn’t really matter how we rank them since we only care about the threshold between positive and negative samples.
+Secondly, we can combine our algorithm with active learning to save even more label cost. Many active learning algorithms ask about a batch of samples in each round, and we can use our binary search to label each batch. In more detail, we show in our paper the following theorem:
+Theorem (Informal). Suppose each label is correct with probability \(1/2+c\), for a constant \(c\). Then an active learning algorithm would require \(\Omega(d\log(1/\varepsilon))\) direct labels to achieve an error rate of \(\varepsilon\). On the other hand, using binary search on ranking will require \(O(\log(\varepsilon))\) direct labels, and \(O(d\log(d/\varepsilon))\) comparisons.
+Regression: Isotonic Regression
+If we are doing regression, we cannot hope to find a threshold in the ranking, since we need to predict a real number for each label. However, ranking can still help regression through isotonic regression. Given a ranked sequence\begin{align*} f(x_1)\leq f(x_2)\leq\cdots \leq f(x_n) \text{ and } y_i=f(x_i)+\varepsilon_i, \varepsilon_i\sim \mathcal{N}(0,1),\end{align*} the isotonic regression aims to find the solution of\begin{align*}\min_{\hat{y}_i} & \sum_{i=1}^n (\hat{y}_i-y_i)^2\\s.t.& \hat{y}_i\leq \hat{y}_{i+1}, \forall i=1,2,…,n-1.\end{align*}If we use \(y_i\) as our labels, the mean-squared error \(\frac{1}{n}\sum_{i=1}^m (y_i-f(x_i))^2\) will have an expectation of 1, since \(\varepsilon_i\sim \mathcal{N}(0,1)\). Isotonic regression enjoys  \(m^{-2/3}\) statistical rate, which is diminishing as \(n\rightarrow \infty\). For a reference, see (Zhang, 2002).
+The \(m^{-2/3}\) decays faster than the optimal rates of many non-parametric regression problems because it is dimension-independent. Non-parametric methods typically have an error rate of \(m^{-\frac{2}{d+2}}\) given \(m\) labels, the so-called curse of dimensionality (see Tsybakov’s book for an introduction to non-parametric regression). Since the rate of isotonic regression decays much faster than the non-parametric regression problems, we only need a fraction of labels for good accuracy. We leverage this property to design the following algorithm: suppose we only directly query \(m\) labels. While having a ranking over \(n\) points, we can infer the unlabeled samples by just using their nearest labeled points. That is, we query \(y_{t_1},…,y_{t_m}\) and get refined values \(\hat{y}_{t_1},…,\hat{y}_{t_m}\) using the above isotonic regression formulation, we label each point as \(\hat{y}_i=\hat{y}_{t_j}\), where \(i \in 1,…,n\) and \(t_j\) is \(i\)’s nearest neighbor in \(\{t_1,…,t_m\}\).
+In our paper, we analyze this algorithm under the non-parametric regression setting. We have the following theorem:
+Theorem (Informal). Suppose the underlying function \(f\) is Lipschitz. If we use \(m\) direct labels, any algorithm will incur an error of at least \(\Omega\left(m^{-\frac{2}{d+2}}\right)\). If we use isotonic regression with nearest neighbors, the error will be \(m^{-\frac{2}{3}}+n^{-\frac{2}{d}}\), where \(m\) is the number of direct labels, and \(n\) is the number of ranked points. This rate is optimal for any algorithm using \(m\) direct labels and \(n\) ranked points.
+Note the MSE of non-parametric regression using only the labeled samples is \(\Theta(m^{-\frac{2}{d+2}})\) which is exponential in \(d\) and makes non-parametric regression impractical in high-dimensions. Focusing on the dependence on \(m\), our result improves the rate to  \(m^{-2/3}\), which is no longer exponential. Therefore, using the ranking information we can avoid the curse of dimensionality.
+Comparison in Practice
+Now let’s test our algorithm in practice. Our task is to predict the ages of people in images, as aforementioned.  We use the APPA-REAL dataset, with 7,113 images and associated ages. The dataset is suitable for comparisons because it contains both the biological age, as well as the apparent age estimated from human labelers. Suppose our goal is to predict the biological age, and we can simulate comparisons by comparing the apparent ages.
+Our classification task is to judge whether a person is under or over 30 years old.  We compare our method with a base-line active learning method which only uses label queries. Both methods use a linear SVM classifier ( features are extracted from the 128-dimension top layer of FaceNet, an unsupervised method to extract features from faces). The shades represent standard variation over 20 repeats of experiments. The plots show comparisons indeed reduce the number of label queries.
+
+Our regression task is to predict the actual ages, and we compute the mean squared error (MSE) to evaluate different methods. Our label-only baselines are nearest neighbors(NN) methods with 5 or 10 neighbors(5-NN and 10-NN), and support vector regression(SVR). Our methods use 5-NN or 10-NN after we have inferred the labels via isotonic regression. We thus name our methods R\(^2\) 5-NN and R\(^2\) 10-NN. Again, the experiment shows comparisons can reduce the number of label queries.
+
+Future Works
+Of course, binary classification and regression are not the only settings where using comparison information can have a big impact. Using the rank-and-infer approach, we hope to extend these results to multi-class classification, optimization, and reinforcement learning. Feel free to get in touch if you want to learn more!
+DISCLAIMER: All opinions expressed in this post are those of the author and do not represent the views of Carnegie Mellon University. 
+
+machine learning
+♥291
+ 33118
+ 6
+You Might Also Like
+
+
+Counterfactual predictions under runtime confounding
+April 16, 2021
+
+
+
+CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+July 3, 2020
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+Counterfactual predictions under runtime confounding
+April 16, 2021
+
+
+CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+July 3, 2020
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+6 Comments
+
+
+ 
+
+
+Reply 
+Kyle Butler
+March 30, 2019 at 10:32 AM
+Thanks for writing. Not ML fluent, so please excuse vocab. 
+Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? 
+Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+Nikita Popov
+May 5, 2019 at 2:40 PM
+Dear Mr. Xu,
+Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.
+My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.
+If you are interested in discussing this topic, feel free to contact me via email.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+pg2455
+May 13, 2019 at 9:16 AM
+Hi,
+Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+6 Comments
+
+
+ 
+
+
+Reply 
+Kyle Butler
+March 30, 2019 at 10:32 AM
+Thanks for writing. Not ML fluent, so please excuse vocab. 
+Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? 
+Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+Nikita Popov
+May 5, 2019 at 2:40 PM
+Dear Mr. Xu,
+Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.
+My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.
+If you are interested in discussing this topic, feel free to contact me via email.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+pg2455
+May 13, 2019 at 9:16 AM
+Hi,
+Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+6 Comments
+
+
+ 
+
+
+Reply 
+Kyle Butler
+March 30, 2019 at 10:32 AM
+Thanks for writing. Not ML fluent, so please excuse vocab. 
+Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? 
+Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+Nikita Popov
+May 5, 2019 at 2:40 PM
+Dear Mr. Xu,
+Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.
+My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.
+If you are interested in discussing this topic, feel free to contact me via email.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+pg2455
+May 13, 2019 at 9:16 AM
+Hi,
+Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+
+
+
+
+
+
+ 
+
+
+Reply 
+Kyle Butler
+March 30, 2019 at 10:32 AM
+Thanks for writing. Not ML fluent, so please excuse vocab. 
+Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? 
+Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+
+
+
+ 
+
+
+Reply 
+Kyle Butler
+March 30, 2019 at 10:32 AM
+Thanks for writing. Not ML fluent, so please excuse vocab. 
+Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? 
+Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?
+
+
+ 
+
+Reply 
+Kyle Butler
+March 30, 2019 at 10:32 AM
+Thanks for writing. Not ML fluent, so please excuse vocab. 
+Can you elaborate on optics for accomplishing scalable Multi-Class Classification? Is is necessary to have independent rank-ordering dimensions for each combination of classes? 
+Consider case where probability a given label belongs to a given class is given (ex. probability a label belongs to Class A is 1/#classes). Optics for application of a Markovian process for weight assignment to sorting in each combination-dimension? We don’t need to keep comparison methods divorced from traditional classification methods, because we’re only interested in ranking via comparison of jank estimates, right?
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+ 
+
+Reply 
+Yichong Xu
+April 4, 2019 at 10:17 PM
+Thanks for the interest! We didn’t analyze multi-class classification in our paper. In my opinion, it might be easier to compare according to one-vs-all rule, i.e., which image looks more like a cat? Which image looks more like a horse? And we can use the same method to compute one binary classifier for each class.
+If we build ranking for each combination we will need a quadratic number of comparisons. I don’t quite understand your saying about Markovian process for weight assignment, can you elaborate?
+Thanks,
+Yichong
+
+
+
+ 
+
+
+Reply 
+Nikita Popov
+May 5, 2019 at 2:40 PM
+Dear Mr. Xu,
+Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.
+My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.
+If you are interested in discussing this topic, feel free to contact me via email.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+
+
+
+ 
+
+
+Reply 
+Nikita Popov
+May 5, 2019 at 2:40 PM
+Dear Mr. Xu,
+Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.
+My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.
+If you are interested in discussing this topic, feel free to contact me via email.
+
+
+ 
+
+Reply 
+Nikita Popov
+May 5, 2019 at 2:40 PM
+Dear Mr. Xu,
+Thank you for your article, it provides a meaningful insight on importance of pairwise comparisons in traditional machine learning tasks.
+My name is Nikita Popov, I am researcher at Yandex. My field of research is web search quality evaluation, mainly through offline metrics. One thing I didn’t catch in your post is how you incorporate the cost of preliminary pairwise labels into number of label queries when you compare proposed method to baseline. Comparisons are indeed cheaper than pointwise markup, yet it still costs at least a fraction of pointwise markup, and should be accounted in estimation of cost of obtaining training dataset as well. Our experiments show that for our tasks of evaluating relevance of a document to a search query one pointwise label costs roughly two pairwise labels. If comparisons are consistent, as you said, we can use traditional sorting algorithms and get some profit in exchanging some pointwise labels for pairwise, otherwise it may require more pairwise labels to achieve the same quality of prediction than number of pointwise labels comparisons aimed to replace.
+If you are interested in discussing this topic, feel free to contact me via email.
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+ 
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:33 PM
+Nice point! Indeed the cost of comparison is a fraction of direct labels, and we also find this in our experiments. We mostly make two points about the costs in our paper:
+i) If we use mostly comparisons, we will end up using a similar number of comparisons as the number of labels in the label-only case, while only using a minimal number of labels;
+ii) Our regression algorithm can work under any given budget of n comparisons and m labels.
+Yet a good future question is to figure out the optimal allocation of n and m when we have a total budget; in our experiments, we use a small number of labels and a large number of comparisons, but it might not be the best choice. We will have a full version of the regression paper analyzing linear and nonparametric regression, with much more detailed experiments on this setting coming out soon. Stay tuned! I will email you when we put that on arxiv.
+
+
+
+ 
+
+
+Reply 
+pg2455
+May 13, 2019 at 9:16 AM
+Hi,
+Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.
+
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+
+
+
+
+ 
+
+
+Reply 
+pg2455
+May 13, 2019 at 9:16 AM
+Hi,
+Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.
+
+
+ 
+
+Reply 
+pg2455
+May 13, 2019 at 9:16 AM
+Hi,
+Can you elaborate more on the loss function that is used here?
+I understand that the idea is to access the pairwise rankings of the samples, but I am unable to see how does it propagate through the loss function.
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+
+
+
+ 
+
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+
+ 
+
+Reply 
+Yichong Xu
+June 3, 2019 at 11:23 PM
+Hi,
+Good question! Actually we do not directly incorporate the comparisons into our loss; instead the comparisons are transformed into inferred labels in both regression and classification problems. And then we just use any loss we use on the inferred labels.
+
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+ 
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+  [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+[instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+

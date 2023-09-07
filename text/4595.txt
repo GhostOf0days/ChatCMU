@@ -1,0 +1,2009 @@
+Active Search (Active Sensing) in robotics refers to the problem of searching for objects of interest in an unknown environment by making data-collection decisions. Active Search has many applications including the search and rescue of human survivors following disasters, detecting gas leaks or locating and preventing animal poachers. Our focus in this work is to perform active search using aerial or ground robots. We intend to use multiple robots to parallelize and speed up the search.To perform active search using multiple robots, we need a technique to coordinate the actions of all robots and help them decide where to sense at every point in time. One way to approach this problem is to have a center plan and coordinate actions of all robots. This approach requires the center to maintain a synchronous and constant communication channel to all robots. However, maintaining constant communication is very difficult in certain applications, such as surveillance, exploration of unknown environments and search-and-rescue. For example, moving in an unknown or cluttered environment, it is very likely for robots to get trapped and temporarily lose their connection to the center [1]. As a result, a central coordinator that expects synchronicity from all robots at all times is not feasible as any robot failure or communication delay could disrupt the entire process. To clarify, we can still assume the robots are communicating with each other in a decentralized manner to share their observations. It is just that their communication links can be unreliable at times. With this motivation in mind, we are interested in developing a decentralized multi-robot algorithm that helps robots independently decide where to go to sense at every point in time. This is typically viewed as the problem of intelligently choosing a waypoint to navigate towards. Each robot can use any available information shared from other robots’ sensed locations to decide which waypoint to navigate to next. Since communication between robots can be unreliable, our proposed algorithm must be able to use only partial information shared among robots and never depend on full information to make decisions. Imagine sending multiple robots to a disaster-striken area to look for survivors (Objects of Interest (OOI)). The robots move around and collect information in the form of optical imagery passing through an object detector. We can also assume some robots have access to a form of depth map for the images.For our problem setup, robots are either aerial:or ground-based:We describe the mission environment with a vector \({\beta }\) which is zero everywhere except for the location of OOIs. We can write the sensing operation of a robot at time step t as \(y_t = x_t \beta + \epsilon_t\), where, \(x_t\) is the sensing action, and \(y_t\) and \(\epsilon_t\) are the observation and noise vectors. Robots share their measurements with each other whenever possible. At each time step \(t\), our objective is to have the robot use available measurements to choose a sensing action (waypoint) \(x_t\) that lets it best estimate the parameter \(\beta\).As discussed earlier we do not have access to a center to coordinate actions of all robots. To solve this problem, we propose using parallelized Asynchronous Thompson Sampling. Thompson Sampling (TS) is an online optimization method that balances between exploration and exploitation by maximizing the expected reward assuming that a sample from the posterior is the true state of the world. We believe TS is an excellent candidate for an asynchronous multi-agent online algorithm without a central planner. Essentially, by using a posterior sample in its reward function, TS allows for a calculated randomness in the reward that enables multiple agents to independently solve for different values that equally contribute to the overall goal of locating OOIs.In short, to start a new task, each robot in turn 1) Samples \(\beta^*\) from its posterior distribution of \(\beta\). 2) senses an area that the sample suggests include OOIs. 3) updates its measurements with the new sensing observation.Our second challenge is the choice of inference method for \(\beta\). To perform active search, traditionally people have used coverage planning methods with exhaustive search. However, with the availability of observations with high and low uncertainty, an optimized active search method can locate OOIs faster than exhaustive search in terms of number of measurements. Such faster recovery is achievable due to the concept of sparse signal recovery which says that we can recover a sparse signal with size M by taking less than M linear measurements. By using sparse signal recovery as the inference method for TS, we can create the right balance between two modes: 1. exploring wider regions farther away from the robot with larger uncertainty 2. exploiting the regions we suspect of including an OOI by having robots move closer to them. Facing a Problem with Thompson Sampling and Sparsity: Unfortunately, implementing TS given the sparse prior leads to poor performance because sparsity limits its exploration capability. We combat this problem in 2 steps. Step 1. Detecting the Problem: We can associate this poor performance with one of the drawbacks of TS discussed in [2]. In general, TS’s myopic approach to optimizing the expected reward selects the sparse sensing action that promotes the immediate reward on the sparse estimate. As a result, TS will ignore wider sensing actions that can consider longer term optimality.Step 2. Proposing a Solution: We propose making an assumption on the prior distribution that the neighboring entries of the sparse vector \(\beta\) are spatially correlated, i.e. \(\beta\) is block sparse. We expect block sparsity to introduce exploration ability while also keeping sparsity a useful information in the recovery process. In particular, by gradually reducing the length of the blocks from a large value, we gently trade exploration with exploitation over time. With the assumption of sparsity, each robot can use maximum a posteriori (MAP) estimation to solve for parameter beta, i.e. $$\hat{\beta} = \text{argmax} \,\, p(\beta|\mathbf{Y_t},\mathbf{X_t})=\text{argmax} \,\, p(\beta)\,\, \prod_{(y_{t’},x_{t’}) \in (\mathbf{Y_t},\mathbf{X_t})}p(y_{t’}|\beta,x_{t’}),$$ where \((\mathbf{Y_t},\mathbf{X_t})\) is the set of measurements available to the robot at time t. To promote block-sparsity, we use a block sparse prior \(p(\beta) = \mathcal{N} (0^{n \times 1},\Sigma_0)\), where: \(\Sigma_0 = diag([\gamma_1 B_1,…,\gamma_M B_M])\), with \(\gamma_m\) and \(B_m \in \mathcal{R}^{L \times L}\) \((m=1,..,M)\) as hyperparameters. Here, \(\gamma_m\) controls the sparsity of each block as is the case in sparse Bayesian learning methods [9], i.e. when \(\gamma_m=0\), the corresponding block \(m\) is zero. Here, \(L\) is the length of the blocks that we will gradually reduce in the TS process to gently trade exploration with exploitation. To avoid overfitting while estimating these hyperparameters, [9] suggests one matrix \(B=B_1=…=B_M\) to model all block covariances.For our likelihood distribution \(p(y_{t’}|\beta,x_{t’})\), we know from our problem setup that \(y_t = x_t \beta + \epsilon_t\) which means \(p(y_{t’}|\beta,x_{t’})=x_t \beta + p(\epsilon_t)\). In the next section, we will define a model for the observation noise distribution \(p(\epsilon_t)\).Our third challenge in this problem is choosing our observation model (sensing model). As described in the problem setup, our observation model needs to consider the practical side of fielding real sensors which includes applying object detection to the sensed images.In order to create a good sensing model, we consider our target algorithmic feature: enabling the robots to first explore wider regions from higher distance and then only get closer to locations the robots suspect to include an OOI. This feature is conceivable if we are realistically modeling actions from higher distance with higher uncertainty. Consequently, we need a sensing model that considers the notion of uncertainty in existence of objects based on their distance.Existing algorithms in general belong to one of two camps when modeling sensing capabilities of search agents. One camp is the field of robotics performing information gathering or simultaneous localization and mapping (SLAM)[4]. Existing algorithms in this field generally focus on uncertainty in location and ignore uncertainty in existence of objects. The second camp is the fields of signal processing (Compressed Sensing) and game theory (search theory) [5]. This field usually considers existence uncertainty (e.g. False Positives/Negative rates); however, they give no insight on how it is related to sensor capabilities and distance.Our idea is to propose a practical sensing model that gets insight from both camps as follows. When a real, autonomous robot performs object detection on a sensed image, it reports detections probabilistically and its precision- recall curves degrade with distance between the object and the detector. In fact, we make the following claim.Claim. We expect the confidence score of an object detector to gradually decline as a function of the object’s distance from the camera (assuming fixed focal length).In particular, we model the performance of the robot’s object detector by formulating its confidence score for any object distance with an additive one-sided Gaussian noise as depicted in this Figure. Mathematically speaking, we will model the observation noise distribution in the problem setup as \(p(\epsilon_t) = \mathcal{N^+}(0,\sigma^2_\ell) \). The variance of this noise \(\sigma^2_\ell\)is our measure of “existence uncertainty” which in accordance to our claim increases with distance \(\ell\) between object and camera.To back up this claim, we created our own pseudo-realistic environment using the Unreal Engine 4 (UE4) game development platform [6] with the Airsim plugin [7].We then randomly placed a large number of people and animals in our UE4 environment. Using AirSim, we generated about 100 image and depth maps from our environment and checked the confidence score of YOLOv3 applied to the images. YOLOv3 is real-time object detection system proposed by [8]. Note that we are using the YOLOv3’s original weights trained by COCO dataset.Using this dataset, we created a normalized histogram as shown in this figure of YOLOv3’s confidence score on detected objects given their distance from the camera. This figure clearly supports our mathematical modeling and claim that our uncertainty in confidence score increases with object’s distance from the camera.We developed a Thompson Sampling-based algorithm for ground robots with Sparse Bayesian Learning as inference that uses the sensing model proposed above. We call the resulting algorithm NATS (Noise-Aware Thompson Sampling).The figure here illustrates the performance of our proposed method NATS in a simulation setup. All algorithms are tested in a ground robot active search setting where 4 robots are trying to locate 5 OOIs randomly placed in an \(16 \times 16\) search area. The full recovery rate refers to rate of recovering all OOIs without declaring any false positives. From this figure we see that NATS significantly outperforms the following methods: Below is a video demonstration of NATS applied to our game environment.Lastly, we invite the interested reader to check out our ICRA and UAI publications for more details on the algorithms and their performance analysis:[1] Cyril Robin and Simon Lacroix. Multi-robot target detection and tracking: taxonomy and survey. Autonomous Robots, 40(4): 729–760, 2016.                                                                               [2] Daniel J Russo, Benjamin Van Roy, Abbas Kazerouni, Ian Osband, Zheng Wen, et al. A tutorial on Thompson sampling. Foundations and Trends® in Machine Learning, 11(1), 2018.[3] Yifei Ma, Roman Garnett, and Jeff Schneider. Active search for sparse signals with region sensing. In Thirty-First AAAI Conference on Artificial Intelligence, 2017.                                        [4] R. Mur-Artal, J. M. M. Montiel, and J. D. Tardos, “ORB-SLAM: a versatile and accurate monocular SLAM system,” IEEE Transactions on Robotics, vol. 31, no. 5, pp. 1147–1163, 2015.[5] B. A. Asfora, J. Banfi, and M. Campbell, “Mixed-integer linear programming models for multi-robot non-adversarial search,” IEEE Robotics and Automation Letters, 2020.                               [6] Epic Games, 2019. Unreal Engine, Available at: https://www.unrealengine.com.                          [7] S. Shah, D. Dey, C. Lovett, and A. Kapoor, “Airsim: High-fidelity visual and physical simulation for autonomous vehicles,” in Field and service robotics. Springer, 2018.[8] J. Redmon and A. Farhadi, “Yolov3: An incremental improvement,” arXiv preprint arXiv:1804.02767, 2018.[9] Zhilin Zhang and Bhaskar D Rao. Sparse signal recovery with temporally correlated source vectors using sparse Bayesian learning. IEEE Journal of Selected Topics in Signal Processing, 5(5):912–926, 2011.Hi Ramina,Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? Thank you very much.Best regards,XingshuaiName * Email * Website  Save my name, email, and website in this browser for the next time I comment. 
+
+[instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+[ Home ][ Submissions ][ About ]HomeSubmissionsAboutHomeSubmissionsAboutResearchEducationalPoint: Exhaustive search Rnd: random action selection  RSI: information-greedy method by [3] IG: information-greedy method that computes information as the negative entropy of NATS’s posterior   BinTS: NATS algorithm without sparsity assumption (NATS outperforming BinTS is evidence on the importance of sparsity that NATS takes into account)R. Ghods, W. J. Durkin, J. Schneider, “Multi Agent Active Search using Realistic Depth-Aware Noise Model”, 2021 IEEE International Conference on Robotics Automation (ICRA), https://arxiv.org/pdf/2011.04825.pdfR. Ghods, A. Banerjee, J. Schneider, “Decentralized Multi-Agent Active Search for Sparse Signals”. 2021 Conference on Uncertainty in Artificial Intelligence (UAI), https://arxiv.org/pdf/2006.14718.pdf
+
+♥217
+ 7659
+ 1
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ PLAS: Latent Action Space for Offline Reinforcement Learning
+ See, Hear, Explore: Curiosity via Audio-Visual Association
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+
+Input your search keywords and press Enter.
+
+
+
+
+
+
+
+Categories:
+
+Research
+Educational
+
+ 
+
+
+
+
+
+
+
+machine learning Research
+Decentralized Multi-Robot Active Search
+
+
+Authors
+Ramina Ghods 
+
+
+Affiliations
+
+
+Published
+                        June 4, 2021                    
+
+DOI
+
+
+
+
+
+
+
+
+Active Search (Active Sensing) in robotics refers to the problem of searching for objects of interest in an unknown environment by making data-collection decisions. Active Search has many applications including the search and rescue of human survivors following disasters, detecting gas leaks or locating and preventing animal poachers. Our focus in this work is to perform active search using aerial or ground robots. We intend to use multiple robots to parallelize and speed up the search.
+An example of active search in rescue missions using multiple aerial robots
+To perform active search using multiple robots, we need a technique to coordinate the actions of all robots and help them decide where to sense at every point in time. One way to approach this problem is to have a center plan and coordinate actions of all robots. This approach requires the center to maintain a synchronous and constant communication channel to all robots. However, maintaining constant communication is very difficult in certain applications, such as surveillance, exploration of unknown environments and search-and-rescue. For example, moving in an unknown or cluttered environment, it is very likely for robots to get trapped and temporarily lose their connection to the center [1]. As a result, a central coordinator that expects synchronicity from all robots at all times is not feasible as any robot failure or communication delay could disrupt the entire process. To clarify, we can still assume the robots are communicating with each other in a decentralized manner to share their observations. It is just that their communication links can be unreliable at times. 
+With this motivation in mind, we are interested in developing a decentralized multi-robot algorithm that helps robots independently decide where to go to sense at every point in time. This is typically viewed as the problem of intelligently choosing a waypoint to navigate towards. Each robot can use any available information shared from other robots’ sensed locations to decide which waypoint to navigate to next. Since communication between robots can be unreliable, our proposed algorithm must be able to use only partial information shared among robots and never depend on full information to make decisions. 
+Problem Setup
+Imagine sending multiple robots to a disaster-striken area to look for survivors (Objects of Interest (OOI)). The robots move around and collect information in the form of optical imagery passing through an object detector. We can also assume some robots have access to a form of depth map for the images.
+For our problem setup, robots are either aerial:
+
+or ground-based:
+
+
+We describe the mission environment with a vector \({\beta }\) which is zero everywhere except for the location of OOIs. We can write the sensing operation of a robot at time step t as \(y_t = x_t \beta + \epsilon_t\), where, \(x_t\) is the sensing action, and \(y_t\) and \(\epsilon_t\) are the observation and noise vectors. Robots share their measurements with each other whenever possible. At each time step \(t\), our objective is to have the robot use available measurements to choose a sensing action (waypoint) \(x_t\) that lets it best estimate the parameter \(\beta\).
+
+Challenges and Our Solutions
+1. Decentralized Coordination
+As discussed earlier we do not have access to a center to coordinate actions of all robots. To solve this problem, we propose using parallelized Asynchronous Thompson Sampling. Thompson Sampling (TS) is an online optimization method that balances between exploration and exploitation by maximizing the expected reward assuming that a sample from the posterior is the true state of the world. We believe TS is an excellent candidate for an asynchronous multi-agent online algorithm without a central planner. Essentially, by using a posterior sample in its reward function, TS allows for a calculated randomness in the reward that enables multiple agents to independently solve for different values that equally contribute to the overall goal of locating OOIs.
+
+
+In short, to start a new task, each robot in turn 1) Samples \(\beta^*\) from its posterior distribution of \(\beta\). 2) senses an area that the sample suggests include OOIs. 3) updates its measurements with the new sensing observation.
+
+
+
+
+
+2. Choice of Inference Method
+Our second challenge is the choice of inference method for \(\beta\). To perform active search, traditionally people have used coverage planning methods with exhaustive search. However, with the availability of observations with high and low uncertainty, an optimized active search method can locate OOIs faster than exhaustive search in terms of number of measurements. Such faster recovery is achievable due to the concept of sparse signal recovery which says that we can recover a sparse signal with size M by taking less than M linear measurements. By using sparse signal recovery as the inference method for TS, we can create the right balance between two modes: 1. exploring wider regions farther away from the robot with larger uncertainty 2. exploiting the regions we suspect of including an OOI by having robots move closer to them. 
+Facing a Problem with Thompson Sampling and Sparsity: Unfortunately, implementing TS given the sparse prior leads to poor performance because sparsity limits its exploration capability. We combat this problem in 2 steps. 
+Step 1. Detecting the Problem: We can associate this poor performance with one of the drawbacks of TS discussed in [2]. In general, TS’s myopic approach to optimizing the expected reward selects the sparse sensing action that promotes the immediate reward on the sparse estimate. As a result, TS will ignore wider sensing actions that can consider longer term optimality.
+Step 2. Proposing a Solution: We propose making an assumption on the prior distribution that the neighboring entries of the sparse vector \(\beta\) are spatially correlated, i.e. \(\beta\) is block sparse. We expect block sparsity to introduce exploration ability while also keeping sparsity a useful information in the recovery process. In particular, by gradually reducing the length of the blocks from a large value, we gently trade exploration with exploitation over time. 
+With the assumption of sparsity, each robot can use maximum a posteriori (MAP) estimation to solve for parameter beta, i.e. 
+$$\hat{\beta} = \text{argmax} \,\, p(\beta|\mathbf{Y_t},\mathbf{X_t})=\text{argmax} \,\, p(\beta)\,\, \prod_{(y_{t’},x_{t’}) \in (\mathbf{Y_t},\mathbf{X_t})}p(y_{t’}|\beta,x_{t’}),$$ 
+where \((\mathbf{Y_t},\mathbf{X_t})\) is the set of measurements available to the robot at time t. To promote block-sparsity, we use a block sparse prior \(p(\beta) = \mathcal{N} (0^{n \times 1},\Sigma_0)\), where: \(\Sigma_0 = diag([\gamma_1 B_1,…,\gamma_M B_M])\), with \(\gamma_m\) and \(B_m \in \mathcal{R}^{L \times L}\) \((m=1,..,M)\) as hyperparameters. Here, \(\gamma_m\) controls the sparsity of each block as is the case in sparse Bayesian learning methods [9], i.e. when \(\gamma_m=0\), the corresponding block \(m\) is zero. Here, \(L\) is the length of the blocks that we will gradually reduce in the TS process to gently trade exploration with exploitation. To avoid overfitting while estimating these hyperparameters, [9] suggests one matrix \(B=B_1=…=B_M\) to model all block covariances.
+For our likelihood distribution \(p(y_{t’}|\beta,x_{t’})\), we know from our problem setup that \(y_t = x_t \beta + \epsilon_t\) which means \(p(y_{t’}|\beta,x_{t’})=x_t \beta + p(\epsilon_t)\). In the next section, we will define a model for the observation noise distribution \(p(\epsilon_t)\).
+3. Modeling Observation Noise
+Our third challenge in this problem is choosing our observation model (sensing model). As described in the problem setup, our observation model needs to consider the practical side of fielding real sensors which includes applying object detection to the sensed images.
+
+
+In order to create a good sensing model, we consider our target algorithmic feature: enabling the robots to first explore wider regions from higher distance and then only get closer to locations the robots suspect to include an OOI. This feature is conceivable if we are realistically modeling actions from higher distance with higher uncertainty. Consequently, we need a sensing model that considers the notion of uncertainty in existence of objects based on their distance.
+
+
+
+
+
+
+Existing algorithms in general belong to one of two camps when modeling sensing capabilities of search agents. One camp is the field of robotics performing information gathering or simultaneous localization and mapping (SLAM)[4]. Existing algorithms in this field generally focus on uncertainty in location and ignore uncertainty in existence of objects. The second camp is the fields of signal processing (Compressed Sensing) and game theory (search theory) [5]. This field usually considers existence uncertainty (e.g. False Positives/Negative rates); however, they give no insight on how it is related to sensor capabilities and distance.
+Our Idea
+Our idea is to propose a practical sensing model that gets insight from both camps as follows. When a real, autonomous robot performs object detection on a sensed image, it reports detections probabilistically and its precision- recall curves degrade with distance between the object and the detector. In fact, we make the following claim.
+Claim. We expect the confidence score of an object detector to gradually decline as a function of the object’s distance from the camera (assuming fixed focal length).
+
+
+In particular, we model the performance of the robot’s object detector by formulating its confidence score for any object distance with an additive one-sided Gaussian noise as depicted in this Figure. Mathematically speaking, we will model the observation noise distribution in the problem setup as \(p(\epsilon_t) = \mathcal{N^+}(0,\sigma^2_\ell) \). The variance of this noise \(\sigma^2_\ell\)is our measure of “existence uncertainty” which in accordance to our claim increases with distance \(\ell\) between object and camera.
+
+
+Our Claim: Confidence score declines with object’s distance
+
+
+To back up this claim, we created our own pseudo-realistic environment using the Unreal Engine 4 (UE4) game development platform [6] with the Airsim plugin [7].
+
+
+
+We then randomly placed a large number of people and animals in our UE4 environment. Using AirSim, we generated about 100 image and depth maps from our environment and checked the confidence score of YOLOv3 applied to the images. YOLOv3 is real-time object detection system proposed by [8]. Note that we are using the YOLOv3’s original weights trained by COCO dataset.
+
+
+
+
+
+
+
+Using this dataset, we created a normalized histogram as shown in this figure of YOLOv3’s confidence score on detected objects given their distance from the camera. This figure clearly supports our mathematical modeling and claim that our uncertainty in confidence score increases with object’s distance from the camera.
+
+
+
+
+
+Simulation Results and Video Demonstration
+We developed a Thompson Sampling-based algorithm for ground robots with Sparse Bayesian Learning as inference that uses the sensing model proposed above. We call the resulting algorithm NATS (Noise-Aware Thompson Sampling).
+
+
+The figure here illustrates the performance of our proposed method NATS in a simulation setup. All algorithms are tested in a ground robot active search setting where 4 robots are trying to locate 5 OOIs randomly placed in an \(16 \times 16\) search area. The full recovery rate refers to rate of recovering all OOIs without declaring any false positives. From this figure we see that NATS significantly outperforms the following methods: 
+
+
+
+
+
+Point: Exhaustive search Rnd: random action selection  RSI: information-greedy method by [3] IG: information-greedy method that computes information as the negative entropy of NATS’s posterior   BinTS: NATS algorithm without sparsity assumption (NATS outperforming BinTS is evidence on the importance of sparsity that NATS takes into account)
+Below is a video demonstration of NATS applied to our game environment.
+
+
+
+
+Lastly, we invite the interested reader to check out our ICRA and UAI publications for more details on the algorithms and their performance analysis:
+R. Ghods, W. J. Durkin, J. Schneider, “Multi Agent Active Search using Realistic Depth-Aware Noise Model”, 2021 IEEE International Conference on Robotics Automation (ICRA), https://arxiv.org/pdf/2011.04825.pdfR. Ghods, A. Banerjee, J. Schneider, “Decentralized Multi-Agent Active Search for Sparse Signals”. 2021 Conference on Uncertainty in Artificial Intelligence (UAI), https://arxiv.org/pdf/2006.14718.pdf
+
+A Few References
+[1] Cyril Robin and Simon Lacroix. Multi-robot target detection and tracking: taxonomy and survey. Autonomous Robots, 40(4): 729–760, 2016.                                                                               
+[2] Daniel J Russo, Benjamin Van Roy, Abbas Kazerouni, Ian Osband, Zheng Wen, et al. A tutorial on Thompson sampling. Foundations and Trends® in Machine Learning, 11(1), 2018.
+[3] Yifei Ma, Roman Garnett, and Jeff Schneider. Active search for sparse signals with region sensing. In Thirty-First AAAI Conference on Artificial Intelligence, 2017.                                        
+[4] R. Mur-Artal, J. M. M. Montiel, and J. D. Tardos, “ORB-SLAM: a versatile and accurate monocular SLAM system,” IEEE Transactions on Robotics, vol. 31, no. 5, pp. 1147–1163, 2015.
+[5] B. A. Asfora, J. Banfi, and M. Campbell, “Mixed-integer linear programming models for multi-robot non-adversarial search,” IEEE Robotics and Automation Letters, 2020.                               
+[6] Epic Games, 2019. Unreal Engine, Available at: https://www.unrealengine.com.                          
+[7] S. Shah, D. Dey, C. Lovett, and A. Kapoor, “Airsim: High-fidelity visual and physical simulation for autonomous vehicles,” in Field and service robotics. Springer, 2018.
+[8] J. Redmon and A. Farhadi, “Yolov3: An incremental improvement,” arXiv preprint arXiv:1804.02767, 2018.
+[9] Zhilin Zhang and Bhaskar D Rao. Sparse signal recovery with temporally correlated source vectors using sparse Bayesian learning. IEEE Journal of Selected Topics in Signal Processing, 5(5):912–926, 2011.
+
+
+
+
+
+♥217
+ 7659
+ 1
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ PLAS: Latent Action Space for Offline Reinforcement Learning
+
+ See, Hear, Explore: Curiosity via Audio-Visual Association
+
+You Might Also Like
+
+
+
+On Learning Language-Invariant Representations for Universal Machine Translation
+October 23, 2020
+
+
+
+On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+May 12, 2023
+
+
+
+On Learning Invariant Representations for Domain Adaptation
+September 13, 2019
+
+
+
+1 Comment
+
+
+ 
+
+
+Reply 
+Xingshuai Dong
+March 22, 2022 at 7:28 AM
+Hi Ramina,
+Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? 
+Thank you very much.
+Best regards,
+Xingshuai
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+ 
+
+
+
+
+
+
+
+
+machine learning Research
+Decentralized Multi-Robot Active Search
+
+
+Authors
+Ramina Ghods 
+
+
+Affiliations
+
+
+Published
+                        June 4, 2021                    
+
+DOI
+
+
+
+
+
+
+
+
+Active Search (Active Sensing) in robotics refers to the problem of searching for objects of interest in an unknown environment by making data-collection decisions. Active Search has many applications including the search and rescue of human survivors following disasters, detecting gas leaks or locating and preventing animal poachers. Our focus in this work is to perform active search using aerial or ground robots. We intend to use multiple robots to parallelize and speed up the search.
+An example of active search in rescue missions using multiple aerial robots
+To perform active search using multiple robots, we need a technique to coordinate the actions of all robots and help them decide where to sense at every point in time. One way to approach this problem is to have a center plan and coordinate actions of all robots. This approach requires the center to maintain a synchronous and constant communication channel to all robots. However, maintaining constant communication is very difficult in certain applications, such as surveillance, exploration of unknown environments and search-and-rescue. For example, moving in an unknown or cluttered environment, it is very likely for robots to get trapped and temporarily lose their connection to the center [1]. As a result, a central coordinator that expects synchronicity from all robots at all times is not feasible as any robot failure or communication delay could disrupt the entire process. To clarify, we can still assume the robots are communicating with each other in a decentralized manner to share their observations. It is just that their communication links can be unreliable at times. 
+With this motivation in mind, we are interested in developing a decentralized multi-robot algorithm that helps robots independently decide where to go to sense at every point in time. This is typically viewed as the problem of intelligently choosing a waypoint to navigate towards. Each robot can use any available information shared from other robots’ sensed locations to decide which waypoint to navigate to next. Since communication between robots can be unreliable, our proposed algorithm must be able to use only partial information shared among robots and never depend on full information to make decisions. 
+Problem Setup
+Imagine sending multiple robots to a disaster-striken area to look for survivors (Objects of Interest (OOI)). The robots move around and collect information in the form of optical imagery passing through an object detector. We can also assume some robots have access to a form of depth map for the images.
+For our problem setup, robots are either aerial:
+
+or ground-based:
+
+
+We describe the mission environment with a vector \({\beta }\) which is zero everywhere except for the location of OOIs. We can write the sensing operation of a robot at time step t as \(y_t = x_t \beta + \epsilon_t\), where, \(x_t\) is the sensing action, and \(y_t\) and \(\epsilon_t\) are the observation and noise vectors. Robots share their measurements with each other whenever possible. At each time step \(t\), our objective is to have the robot use available measurements to choose a sensing action (waypoint) \(x_t\) that lets it best estimate the parameter \(\beta\).
+
+Challenges and Our Solutions
+1. Decentralized Coordination
+As discussed earlier we do not have access to a center to coordinate actions of all robots. To solve this problem, we propose using parallelized Asynchronous Thompson Sampling. Thompson Sampling (TS) is an online optimization method that balances between exploration and exploitation by maximizing the expected reward assuming that a sample from the posterior is the true state of the world. We believe TS is an excellent candidate for an asynchronous multi-agent online algorithm without a central planner. Essentially, by using a posterior sample in its reward function, TS allows for a calculated randomness in the reward that enables multiple agents to independently solve for different values that equally contribute to the overall goal of locating OOIs.
+
+
+In short, to start a new task, each robot in turn 1) Samples \(\beta^*\) from its posterior distribution of \(\beta\). 2) senses an area that the sample suggests include OOIs. 3) updates its measurements with the new sensing observation.
+
+
+
+
+
+2. Choice of Inference Method
+Our second challenge is the choice of inference method for \(\beta\). To perform active search, traditionally people have used coverage planning methods with exhaustive search. However, with the availability of observations with high and low uncertainty, an optimized active search method can locate OOIs faster than exhaustive search in terms of number of measurements. Such faster recovery is achievable due to the concept of sparse signal recovery which says that we can recover a sparse signal with size M by taking less than M linear measurements. By using sparse signal recovery as the inference method for TS, we can create the right balance between two modes: 1. exploring wider regions farther away from the robot with larger uncertainty 2. exploiting the regions we suspect of including an OOI by having robots move closer to them. 
+Facing a Problem with Thompson Sampling and Sparsity: Unfortunately, implementing TS given the sparse prior leads to poor performance because sparsity limits its exploration capability. We combat this problem in 2 steps. 
+Step 1. Detecting the Problem: We can associate this poor performance with one of the drawbacks of TS discussed in [2]. In general, TS’s myopic approach to optimizing the expected reward selects the sparse sensing action that promotes the immediate reward on the sparse estimate. As a result, TS will ignore wider sensing actions that can consider longer term optimality.
+Step 2. Proposing a Solution: We propose making an assumption on the prior distribution that the neighboring entries of the sparse vector \(\beta\) are spatially correlated, i.e. \(\beta\) is block sparse. We expect block sparsity to introduce exploration ability while also keeping sparsity a useful information in the recovery process. In particular, by gradually reducing the length of the blocks from a large value, we gently trade exploration with exploitation over time. 
+With the assumption of sparsity, each robot can use maximum a posteriori (MAP) estimation to solve for parameter beta, i.e. 
+$$\hat{\beta} = \text{argmax} \,\, p(\beta|\mathbf{Y_t},\mathbf{X_t})=\text{argmax} \,\, p(\beta)\,\, \prod_{(y_{t’},x_{t’}) \in (\mathbf{Y_t},\mathbf{X_t})}p(y_{t’}|\beta,x_{t’}),$$ 
+where \((\mathbf{Y_t},\mathbf{X_t})\) is the set of measurements available to the robot at time t. To promote block-sparsity, we use a block sparse prior \(p(\beta) = \mathcal{N} (0^{n \times 1},\Sigma_0)\), where: \(\Sigma_0 = diag([\gamma_1 B_1,…,\gamma_M B_M])\), with \(\gamma_m\) and \(B_m \in \mathcal{R}^{L \times L}\) \((m=1,..,M)\) as hyperparameters. Here, \(\gamma_m\) controls the sparsity of each block as is the case in sparse Bayesian learning methods [9], i.e. when \(\gamma_m=0\), the corresponding block \(m\) is zero. Here, \(L\) is the length of the blocks that we will gradually reduce in the TS process to gently trade exploration with exploitation. To avoid overfitting while estimating these hyperparameters, [9] suggests one matrix \(B=B_1=…=B_M\) to model all block covariances.
+For our likelihood distribution \(p(y_{t’}|\beta,x_{t’})\), we know from our problem setup that \(y_t = x_t \beta + \epsilon_t\) which means \(p(y_{t’}|\beta,x_{t’})=x_t \beta + p(\epsilon_t)\). In the next section, we will define a model for the observation noise distribution \(p(\epsilon_t)\).
+3. Modeling Observation Noise
+Our third challenge in this problem is choosing our observation model (sensing model). As described in the problem setup, our observation model needs to consider the practical side of fielding real sensors which includes applying object detection to the sensed images.
+
+
+In order to create a good sensing model, we consider our target algorithmic feature: enabling the robots to first explore wider regions from higher distance and then only get closer to locations the robots suspect to include an OOI. This feature is conceivable if we are realistically modeling actions from higher distance with higher uncertainty. Consequently, we need a sensing model that considers the notion of uncertainty in existence of objects based on their distance.
+
+
+
+
+
+
+Existing algorithms in general belong to one of two camps when modeling sensing capabilities of search agents. One camp is the field of robotics performing information gathering or simultaneous localization and mapping (SLAM)[4]. Existing algorithms in this field generally focus on uncertainty in location and ignore uncertainty in existence of objects. The second camp is the fields of signal processing (Compressed Sensing) and game theory (search theory) [5]. This field usually considers existence uncertainty (e.g. False Positives/Negative rates); however, they give no insight on how it is related to sensor capabilities and distance.
+Our Idea
+Our idea is to propose a practical sensing model that gets insight from both camps as follows. When a real, autonomous robot performs object detection on a sensed image, it reports detections probabilistically and its precision- recall curves degrade with distance between the object and the detector. In fact, we make the following claim.
+Claim. We expect the confidence score of an object detector to gradually decline as a function of the object’s distance from the camera (assuming fixed focal length).
+
+
+In particular, we model the performance of the robot’s object detector by formulating its confidence score for any object distance with an additive one-sided Gaussian noise as depicted in this Figure. Mathematically speaking, we will model the observation noise distribution in the problem setup as \(p(\epsilon_t) = \mathcal{N^+}(0,\sigma^2_\ell) \). The variance of this noise \(\sigma^2_\ell\)is our measure of “existence uncertainty” which in accordance to our claim increases with distance \(\ell\) between object and camera.
+
+
+Our Claim: Confidence score declines with object’s distance
+
+
+To back up this claim, we created our own pseudo-realistic environment using the Unreal Engine 4 (UE4) game development platform [6] with the Airsim plugin [7].
+
+
+
+We then randomly placed a large number of people and animals in our UE4 environment. Using AirSim, we generated about 100 image and depth maps from our environment and checked the confidence score of YOLOv3 applied to the images. YOLOv3 is real-time object detection system proposed by [8]. Note that we are using the YOLOv3’s original weights trained by COCO dataset.
+
+
+
+
+
+
+
+Using this dataset, we created a normalized histogram as shown in this figure of YOLOv3’s confidence score on detected objects given their distance from the camera. This figure clearly supports our mathematical modeling and claim that our uncertainty in confidence score increases with object’s distance from the camera.
+
+
+
+
+
+Simulation Results and Video Demonstration
+We developed a Thompson Sampling-based algorithm for ground robots with Sparse Bayesian Learning as inference that uses the sensing model proposed above. We call the resulting algorithm NATS (Noise-Aware Thompson Sampling).
+
+
+The figure here illustrates the performance of our proposed method NATS in a simulation setup. All algorithms are tested in a ground robot active search setting where 4 robots are trying to locate 5 OOIs randomly placed in an \(16 \times 16\) search area. The full recovery rate refers to rate of recovering all OOIs without declaring any false positives. From this figure we see that NATS significantly outperforms the following methods: 
+
+
+
+
+
+Point: Exhaustive search Rnd: random action selection  RSI: information-greedy method by [3] IG: information-greedy method that computes information as the negative entropy of NATS’s posterior   BinTS: NATS algorithm without sparsity assumption (NATS outperforming BinTS is evidence on the importance of sparsity that NATS takes into account)
+Below is a video demonstration of NATS applied to our game environment.
+
+
+
+
+Lastly, we invite the interested reader to check out our ICRA and UAI publications for more details on the algorithms and their performance analysis:
+R. Ghods, W. J. Durkin, J. Schneider, “Multi Agent Active Search using Realistic Depth-Aware Noise Model”, 2021 IEEE International Conference on Robotics Automation (ICRA), https://arxiv.org/pdf/2011.04825.pdfR. Ghods, A. Banerjee, J. Schneider, “Decentralized Multi-Agent Active Search for Sparse Signals”. 2021 Conference on Uncertainty in Artificial Intelligence (UAI), https://arxiv.org/pdf/2006.14718.pdf
+
+A Few References
+[1] Cyril Robin and Simon Lacroix. Multi-robot target detection and tracking: taxonomy and survey. Autonomous Robots, 40(4): 729–760, 2016.                                                                               
+[2] Daniel J Russo, Benjamin Van Roy, Abbas Kazerouni, Ian Osband, Zheng Wen, et al. A tutorial on Thompson sampling. Foundations and Trends® in Machine Learning, 11(1), 2018.
+[3] Yifei Ma, Roman Garnett, and Jeff Schneider. Active search for sparse signals with region sensing. In Thirty-First AAAI Conference on Artificial Intelligence, 2017.                                        
+[4] R. Mur-Artal, J. M. M. Montiel, and J. D. Tardos, “ORB-SLAM: a versatile and accurate monocular SLAM system,” IEEE Transactions on Robotics, vol. 31, no. 5, pp. 1147–1163, 2015.
+[5] B. A. Asfora, J. Banfi, and M. Campbell, “Mixed-integer linear programming models for multi-robot non-adversarial search,” IEEE Robotics and Automation Letters, 2020.                               
+[6] Epic Games, 2019. Unreal Engine, Available at: https://www.unrealengine.com.                          
+[7] S. Shah, D. Dey, C. Lovett, and A. Kapoor, “Airsim: High-fidelity visual and physical simulation for autonomous vehicles,” in Field and service robotics. Springer, 2018.
+[8] J. Redmon and A. Farhadi, “Yolov3: An incremental improvement,” arXiv preprint arXiv:1804.02767, 2018.
+[9] Zhilin Zhang and Bhaskar D Rao. Sparse signal recovery with temporally correlated source vectors using sparse Bayesian learning. IEEE Journal of Selected Topics in Signal Processing, 5(5):912–926, 2011.
+
+
+
+
+
+♥217
+ 7659
+ 1
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ PLAS: Latent Action Space for Offline Reinforcement Learning
+
+ See, Hear, Explore: Curiosity via Audio-Visual Association
+
+You Might Also Like
+
+
+
+On Learning Language-Invariant Representations for Universal Machine Translation
+October 23, 2020
+
+
+
+On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+May 12, 2023
+
+
+
+On Learning Invariant Representations for Domain Adaptation
+September 13, 2019
+
+
+
+1 Comment
+
+
+ 
+
+
+Reply 
+Xingshuai Dong
+March 22, 2022 at 7:28 AM
+Hi Ramina,
+Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? 
+Thank you very much.
+Best regards,
+Xingshuai
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+
+
+
+machine learning Research
+Decentralized Multi-Robot Active Search
+
+
+Authors
+Ramina Ghods 
+
+
+Affiliations
+
+
+Published
+                        June 4, 2021                    
+
+DOI
+
+
+
+
+
+
+
+
+Active Search (Active Sensing) in robotics refers to the problem of searching for objects of interest in an unknown environment by making data-collection decisions. Active Search has many applications including the search and rescue of human survivors following disasters, detecting gas leaks or locating and preventing animal poachers. Our focus in this work is to perform active search using aerial or ground robots. We intend to use multiple robots to parallelize and speed up the search.
+An example of active search in rescue missions using multiple aerial robots
+To perform active search using multiple robots, we need a technique to coordinate the actions of all robots and help them decide where to sense at every point in time. One way to approach this problem is to have a center plan and coordinate actions of all robots. This approach requires the center to maintain a synchronous and constant communication channel to all robots. However, maintaining constant communication is very difficult in certain applications, such as surveillance, exploration of unknown environments and search-and-rescue. For example, moving in an unknown or cluttered environment, it is very likely for robots to get trapped and temporarily lose their connection to the center [1]. As a result, a central coordinator that expects synchronicity from all robots at all times is not feasible as any robot failure or communication delay could disrupt the entire process. To clarify, we can still assume the robots are communicating with each other in a decentralized manner to share their observations. It is just that their communication links can be unreliable at times. 
+With this motivation in mind, we are interested in developing a decentralized multi-robot algorithm that helps robots independently decide where to go to sense at every point in time. This is typically viewed as the problem of intelligently choosing a waypoint to navigate towards. Each robot can use any available information shared from other robots’ sensed locations to decide which waypoint to navigate to next. Since communication between robots can be unreliable, our proposed algorithm must be able to use only partial information shared among robots and never depend on full information to make decisions. 
+Problem Setup
+Imagine sending multiple robots to a disaster-striken area to look for survivors (Objects of Interest (OOI)). The robots move around and collect information in the form of optical imagery passing through an object detector. We can also assume some robots have access to a form of depth map for the images.
+For our problem setup, robots are either aerial:
+
+or ground-based:
+
+
+We describe the mission environment with a vector \({\beta }\) which is zero everywhere except for the location of OOIs. We can write the sensing operation of a robot at time step t as \(y_t = x_t \beta + \epsilon_t\), where, \(x_t\) is the sensing action, and \(y_t\) and \(\epsilon_t\) are the observation and noise vectors. Robots share their measurements with each other whenever possible. At each time step \(t\), our objective is to have the robot use available measurements to choose a sensing action (waypoint) \(x_t\) that lets it best estimate the parameter \(\beta\).
+
+Challenges and Our Solutions
+1. Decentralized Coordination
+As discussed earlier we do not have access to a center to coordinate actions of all robots. To solve this problem, we propose using parallelized Asynchronous Thompson Sampling. Thompson Sampling (TS) is an online optimization method that balances between exploration and exploitation by maximizing the expected reward assuming that a sample from the posterior is the true state of the world. We believe TS is an excellent candidate for an asynchronous multi-agent online algorithm without a central planner. Essentially, by using a posterior sample in its reward function, TS allows for a calculated randomness in the reward that enables multiple agents to independently solve for different values that equally contribute to the overall goal of locating OOIs.
+
+
+In short, to start a new task, each robot in turn 1) Samples \(\beta^*\) from its posterior distribution of \(\beta\). 2) senses an area that the sample suggests include OOIs. 3) updates its measurements with the new sensing observation.
+
+
+
+
+
+2. Choice of Inference Method
+Our second challenge is the choice of inference method for \(\beta\). To perform active search, traditionally people have used coverage planning methods with exhaustive search. However, with the availability of observations with high and low uncertainty, an optimized active search method can locate OOIs faster than exhaustive search in terms of number of measurements. Such faster recovery is achievable due to the concept of sparse signal recovery which says that we can recover a sparse signal with size M by taking less than M linear measurements. By using sparse signal recovery as the inference method for TS, we can create the right balance between two modes: 1. exploring wider regions farther away from the robot with larger uncertainty 2. exploiting the regions we suspect of including an OOI by having robots move closer to them. 
+Facing a Problem with Thompson Sampling and Sparsity: Unfortunately, implementing TS given the sparse prior leads to poor performance because sparsity limits its exploration capability. We combat this problem in 2 steps. 
+Step 1. Detecting the Problem: We can associate this poor performance with one of the drawbacks of TS discussed in [2]. In general, TS’s myopic approach to optimizing the expected reward selects the sparse sensing action that promotes the immediate reward on the sparse estimate. As a result, TS will ignore wider sensing actions that can consider longer term optimality.
+Step 2. Proposing a Solution: We propose making an assumption on the prior distribution that the neighboring entries of the sparse vector \(\beta\) are spatially correlated, i.e. \(\beta\) is block sparse. We expect block sparsity to introduce exploration ability while also keeping sparsity a useful information in the recovery process. In particular, by gradually reducing the length of the blocks from a large value, we gently trade exploration with exploitation over time. 
+With the assumption of sparsity, each robot can use maximum a posteriori (MAP) estimation to solve for parameter beta, i.e. 
+$$\hat{\beta} = \text{argmax} \,\, p(\beta|\mathbf{Y_t},\mathbf{X_t})=\text{argmax} \,\, p(\beta)\,\, \prod_{(y_{t’},x_{t’}) \in (\mathbf{Y_t},\mathbf{X_t})}p(y_{t’}|\beta,x_{t’}),$$ 
+where \((\mathbf{Y_t},\mathbf{X_t})\) is the set of measurements available to the robot at time t. To promote block-sparsity, we use a block sparse prior \(p(\beta) = \mathcal{N} (0^{n \times 1},\Sigma_0)\), where: \(\Sigma_0 = diag([\gamma_1 B_1,…,\gamma_M B_M])\), with \(\gamma_m\) and \(B_m \in \mathcal{R}^{L \times L}\) \((m=1,..,M)\) as hyperparameters. Here, \(\gamma_m\) controls the sparsity of each block as is the case in sparse Bayesian learning methods [9], i.e. when \(\gamma_m=0\), the corresponding block \(m\) is zero. Here, \(L\) is the length of the blocks that we will gradually reduce in the TS process to gently trade exploration with exploitation. To avoid overfitting while estimating these hyperparameters, [9] suggests one matrix \(B=B_1=…=B_M\) to model all block covariances.
+For our likelihood distribution \(p(y_{t’}|\beta,x_{t’})\), we know from our problem setup that \(y_t = x_t \beta + \epsilon_t\) which means \(p(y_{t’}|\beta,x_{t’})=x_t \beta + p(\epsilon_t)\). In the next section, we will define a model for the observation noise distribution \(p(\epsilon_t)\).
+3. Modeling Observation Noise
+Our third challenge in this problem is choosing our observation model (sensing model). As described in the problem setup, our observation model needs to consider the practical side of fielding real sensors which includes applying object detection to the sensed images.
+
+
+In order to create a good sensing model, we consider our target algorithmic feature: enabling the robots to first explore wider regions from higher distance and then only get closer to locations the robots suspect to include an OOI. This feature is conceivable if we are realistically modeling actions from higher distance with higher uncertainty. Consequently, we need a sensing model that considers the notion of uncertainty in existence of objects based on their distance.
+
+
+
+
+
+
+Existing algorithms in general belong to one of two camps when modeling sensing capabilities of search agents. One camp is the field of robotics performing information gathering or simultaneous localization and mapping (SLAM)[4]. Existing algorithms in this field generally focus on uncertainty in location and ignore uncertainty in existence of objects. The second camp is the fields of signal processing (Compressed Sensing) and game theory (search theory) [5]. This field usually considers existence uncertainty (e.g. False Positives/Negative rates); however, they give no insight on how it is related to sensor capabilities and distance.
+Our Idea
+Our idea is to propose a practical sensing model that gets insight from both camps as follows. When a real, autonomous robot performs object detection on a sensed image, it reports detections probabilistically and its precision- recall curves degrade with distance between the object and the detector. In fact, we make the following claim.
+Claim. We expect the confidence score of an object detector to gradually decline as a function of the object’s distance from the camera (assuming fixed focal length).
+
+
+In particular, we model the performance of the robot’s object detector by formulating its confidence score for any object distance with an additive one-sided Gaussian noise as depicted in this Figure. Mathematically speaking, we will model the observation noise distribution in the problem setup as \(p(\epsilon_t) = \mathcal{N^+}(0,\sigma^2_\ell) \). The variance of this noise \(\sigma^2_\ell\)is our measure of “existence uncertainty” which in accordance to our claim increases with distance \(\ell\) between object and camera.
+
+
+Our Claim: Confidence score declines with object’s distance
+
+
+To back up this claim, we created our own pseudo-realistic environment using the Unreal Engine 4 (UE4) game development platform [6] with the Airsim plugin [7].
+
+
+
+We then randomly placed a large number of people and animals in our UE4 environment. Using AirSim, we generated about 100 image and depth maps from our environment and checked the confidence score of YOLOv3 applied to the images. YOLOv3 is real-time object detection system proposed by [8]. Note that we are using the YOLOv3’s original weights trained by COCO dataset.
+
+
+
+
+
+
+
+Using this dataset, we created a normalized histogram as shown in this figure of YOLOv3’s confidence score on detected objects given their distance from the camera. This figure clearly supports our mathematical modeling and claim that our uncertainty in confidence score increases with object’s distance from the camera.
+
+
+
+
+
+Simulation Results and Video Demonstration
+We developed a Thompson Sampling-based algorithm for ground robots with Sparse Bayesian Learning as inference that uses the sensing model proposed above. We call the resulting algorithm NATS (Noise-Aware Thompson Sampling).
+
+
+The figure here illustrates the performance of our proposed method NATS in a simulation setup. All algorithms are tested in a ground robot active search setting where 4 robots are trying to locate 5 OOIs randomly placed in an \(16 \times 16\) search area. The full recovery rate refers to rate of recovering all OOIs without declaring any false positives. From this figure we see that NATS significantly outperforms the following methods: 
+
+
+
+
+
+Point: Exhaustive search Rnd: random action selection  RSI: information-greedy method by [3] IG: information-greedy method that computes information as the negative entropy of NATS’s posterior   BinTS: NATS algorithm without sparsity assumption (NATS outperforming BinTS is evidence on the importance of sparsity that NATS takes into account)
+Below is a video demonstration of NATS applied to our game environment.
+
+
+
+
+Lastly, we invite the interested reader to check out our ICRA and UAI publications for more details on the algorithms and their performance analysis:
+R. Ghods, W. J. Durkin, J. Schneider, “Multi Agent Active Search using Realistic Depth-Aware Noise Model”, 2021 IEEE International Conference on Robotics Automation (ICRA), https://arxiv.org/pdf/2011.04825.pdfR. Ghods, A. Banerjee, J. Schneider, “Decentralized Multi-Agent Active Search for Sparse Signals”. 2021 Conference on Uncertainty in Artificial Intelligence (UAI), https://arxiv.org/pdf/2006.14718.pdf
+
+A Few References
+[1] Cyril Robin and Simon Lacroix. Multi-robot target detection and tracking: taxonomy and survey. Autonomous Robots, 40(4): 729–760, 2016.                                                                               
+[2] Daniel J Russo, Benjamin Van Roy, Abbas Kazerouni, Ian Osband, Zheng Wen, et al. A tutorial on Thompson sampling. Foundations and Trends® in Machine Learning, 11(1), 2018.
+[3] Yifei Ma, Roman Garnett, and Jeff Schneider. Active search for sparse signals with region sensing. In Thirty-First AAAI Conference on Artificial Intelligence, 2017.                                        
+[4] R. Mur-Artal, J. M. M. Montiel, and J. D. Tardos, “ORB-SLAM: a versatile and accurate monocular SLAM system,” IEEE Transactions on Robotics, vol. 31, no. 5, pp. 1147–1163, 2015.
+[5] B. A. Asfora, J. Banfi, and M. Campbell, “Mixed-integer linear programming models for multi-robot non-adversarial search,” IEEE Robotics and Automation Letters, 2020.                               
+[6] Epic Games, 2019. Unreal Engine, Available at: https://www.unrealengine.com.                          
+[7] S. Shah, D. Dey, C. Lovett, and A. Kapoor, “Airsim: High-fidelity visual and physical simulation for autonomous vehicles,” in Field and service robotics. Springer, 2018.
+[8] J. Redmon and A. Farhadi, “Yolov3: An incremental improvement,” arXiv preprint arXiv:1804.02767, 2018.
+[9] Zhilin Zhang and Bhaskar D Rao. Sparse signal recovery with temporally correlated source vectors using sparse Bayesian learning. IEEE Journal of Selected Topics in Signal Processing, 5(5):912–926, 2011.
+
+
+
+
+
+♥217
+ 7659
+ 1
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ PLAS: Latent Action Space for Offline Reinforcement Learning
+
+ See, Hear, Explore: Curiosity via Audio-Visual Association
+
+You Might Also Like
+
+
+
+On Learning Language-Invariant Representations for Universal Machine Translation
+October 23, 2020
+
+
+
+On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+May 12, 2023
+
+
+
+On Learning Invariant Representations for Domain Adaptation
+September 13, 2019
+
+
+
+1 Comment
+
+
+ 
+
+
+Reply 
+Xingshuai Dong
+March 22, 2022 at 7:28 AM
+Hi Ramina,
+Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? 
+Thank you very much.
+Best regards,
+Xingshuai
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+
+machine learning Research
+Decentralized Multi-Robot Active Search
+
+
+Authors
+Ramina Ghods 
+
+
+Affiliations
+
+
+Published
+                        June 4, 2021                    
+
+DOI
+
+
+
+
+
+
+
+
+Active Search (Active Sensing) in robotics refers to the problem of searching for objects of interest in an unknown environment by making data-collection decisions. Active Search has many applications including the search and rescue of human survivors following disasters, detecting gas leaks or locating and preventing animal poachers. Our focus in this work is to perform active search using aerial or ground robots. We intend to use multiple robots to parallelize and speed up the search.
+An example of active search in rescue missions using multiple aerial robots
+To perform active search using multiple robots, we need a technique to coordinate the actions of all robots and help them decide where to sense at every point in time. One way to approach this problem is to have a center plan and coordinate actions of all robots. This approach requires the center to maintain a synchronous and constant communication channel to all robots. However, maintaining constant communication is very difficult in certain applications, such as surveillance, exploration of unknown environments and search-and-rescue. For example, moving in an unknown or cluttered environment, it is very likely for robots to get trapped and temporarily lose their connection to the center [1]. As a result, a central coordinator that expects synchronicity from all robots at all times is not feasible as any robot failure or communication delay could disrupt the entire process. To clarify, we can still assume the robots are communicating with each other in a decentralized manner to share their observations. It is just that their communication links can be unreliable at times. 
+With this motivation in mind, we are interested in developing a decentralized multi-robot algorithm that helps robots independently decide where to go to sense at every point in time. This is typically viewed as the problem of intelligently choosing a waypoint to navigate towards. Each robot can use any available information shared from other robots’ sensed locations to decide which waypoint to navigate to next. Since communication between robots can be unreliable, our proposed algorithm must be able to use only partial information shared among robots and never depend on full information to make decisions. 
+Problem Setup
+Imagine sending multiple robots to a disaster-striken area to look for survivors (Objects of Interest (OOI)). The robots move around and collect information in the form of optical imagery passing through an object detector. We can also assume some robots have access to a form of depth map for the images.
+For our problem setup, robots are either aerial:
+
+or ground-based:
+
+
+We describe the mission environment with a vector \({\beta }\) which is zero everywhere except for the location of OOIs. We can write the sensing operation of a robot at time step t as \(y_t = x_t \beta + \epsilon_t\), where, \(x_t\) is the sensing action, and \(y_t\) and \(\epsilon_t\) are the observation and noise vectors. Robots share their measurements with each other whenever possible. At each time step \(t\), our objective is to have the robot use available measurements to choose a sensing action (waypoint) \(x_t\) that lets it best estimate the parameter \(\beta\).
+
+Challenges and Our Solutions
+1. Decentralized Coordination
+As discussed earlier we do not have access to a center to coordinate actions of all robots. To solve this problem, we propose using parallelized Asynchronous Thompson Sampling. Thompson Sampling (TS) is an online optimization method that balances between exploration and exploitation by maximizing the expected reward assuming that a sample from the posterior is the true state of the world. We believe TS is an excellent candidate for an asynchronous multi-agent online algorithm without a central planner. Essentially, by using a posterior sample in its reward function, TS allows for a calculated randomness in the reward that enables multiple agents to independently solve for different values that equally contribute to the overall goal of locating OOIs.
+
+
+In short, to start a new task, each robot in turn 1) Samples \(\beta^*\) from its posterior distribution of \(\beta\). 2) senses an area that the sample suggests include OOIs. 3) updates its measurements with the new sensing observation.
+
+
+
+
+
+2. Choice of Inference Method
+Our second challenge is the choice of inference method for \(\beta\). To perform active search, traditionally people have used coverage planning methods with exhaustive search. However, with the availability of observations with high and low uncertainty, an optimized active search method can locate OOIs faster than exhaustive search in terms of number of measurements. Such faster recovery is achievable due to the concept of sparse signal recovery which says that we can recover a sparse signal with size M by taking less than M linear measurements. By using sparse signal recovery as the inference method for TS, we can create the right balance between two modes: 1. exploring wider regions farther away from the robot with larger uncertainty 2. exploiting the regions we suspect of including an OOI by having robots move closer to them. 
+Facing a Problem with Thompson Sampling and Sparsity: Unfortunately, implementing TS given the sparse prior leads to poor performance because sparsity limits its exploration capability. We combat this problem in 2 steps. 
+Step 1. Detecting the Problem: We can associate this poor performance with one of the drawbacks of TS discussed in [2]. In general, TS’s myopic approach to optimizing the expected reward selects the sparse sensing action that promotes the immediate reward on the sparse estimate. As a result, TS will ignore wider sensing actions that can consider longer term optimality.
+Step 2. Proposing a Solution: We propose making an assumption on the prior distribution that the neighboring entries of the sparse vector \(\beta\) are spatially correlated, i.e. \(\beta\) is block sparse. We expect block sparsity to introduce exploration ability while also keeping sparsity a useful information in the recovery process. In particular, by gradually reducing the length of the blocks from a large value, we gently trade exploration with exploitation over time. 
+With the assumption of sparsity, each robot can use maximum a posteriori (MAP) estimation to solve for parameter beta, i.e. 
+$$\hat{\beta} = \text{argmax} \,\, p(\beta|\mathbf{Y_t},\mathbf{X_t})=\text{argmax} \,\, p(\beta)\,\, \prod_{(y_{t’},x_{t’}) \in (\mathbf{Y_t},\mathbf{X_t})}p(y_{t’}|\beta,x_{t’}),$$ 
+where \((\mathbf{Y_t},\mathbf{X_t})\) is the set of measurements available to the robot at time t. To promote block-sparsity, we use a block sparse prior \(p(\beta) = \mathcal{N} (0^{n \times 1},\Sigma_0)\), where: \(\Sigma_0 = diag([\gamma_1 B_1,…,\gamma_M B_M])\), with \(\gamma_m\) and \(B_m \in \mathcal{R}^{L \times L}\) \((m=1,..,M)\) as hyperparameters. Here, \(\gamma_m\) controls the sparsity of each block as is the case in sparse Bayesian learning methods [9], i.e. when \(\gamma_m=0\), the corresponding block \(m\) is zero. Here, \(L\) is the length of the blocks that we will gradually reduce in the TS process to gently trade exploration with exploitation. To avoid overfitting while estimating these hyperparameters, [9] suggests one matrix \(B=B_1=…=B_M\) to model all block covariances.
+For our likelihood distribution \(p(y_{t’}|\beta,x_{t’})\), we know from our problem setup that \(y_t = x_t \beta + \epsilon_t\) which means \(p(y_{t’}|\beta,x_{t’})=x_t \beta + p(\epsilon_t)\). In the next section, we will define a model for the observation noise distribution \(p(\epsilon_t)\).
+3. Modeling Observation Noise
+Our third challenge in this problem is choosing our observation model (sensing model). As described in the problem setup, our observation model needs to consider the practical side of fielding real sensors which includes applying object detection to the sensed images.
+
+
+In order to create a good sensing model, we consider our target algorithmic feature: enabling the robots to first explore wider regions from higher distance and then only get closer to locations the robots suspect to include an OOI. This feature is conceivable if we are realistically modeling actions from higher distance with higher uncertainty. Consequently, we need a sensing model that considers the notion of uncertainty in existence of objects based on their distance.
+
+
+
+
+
+
+Existing algorithms in general belong to one of two camps when modeling sensing capabilities of search agents. One camp is the field of robotics performing information gathering or simultaneous localization and mapping (SLAM)[4]. Existing algorithms in this field generally focus on uncertainty in location and ignore uncertainty in existence of objects. The second camp is the fields of signal processing (Compressed Sensing) and game theory (search theory) [5]. This field usually considers existence uncertainty (e.g. False Positives/Negative rates); however, they give no insight on how it is related to sensor capabilities and distance.
+Our Idea
+Our idea is to propose a practical sensing model that gets insight from both camps as follows. When a real, autonomous robot performs object detection on a sensed image, it reports detections probabilistically and its precision- recall curves degrade with distance between the object and the detector. In fact, we make the following claim.
+Claim. We expect the confidence score of an object detector to gradually decline as a function of the object’s distance from the camera (assuming fixed focal length).
+
+
+In particular, we model the performance of the robot’s object detector by formulating its confidence score for any object distance with an additive one-sided Gaussian noise as depicted in this Figure. Mathematically speaking, we will model the observation noise distribution in the problem setup as \(p(\epsilon_t) = \mathcal{N^+}(0,\sigma^2_\ell) \). The variance of this noise \(\sigma^2_\ell\)is our measure of “existence uncertainty” which in accordance to our claim increases with distance \(\ell\) between object and camera.
+
+
+Our Claim: Confidence score declines with object’s distance
+
+
+To back up this claim, we created our own pseudo-realistic environment using the Unreal Engine 4 (UE4) game development platform [6] with the Airsim plugin [7].
+
+
+
+We then randomly placed a large number of people and animals in our UE4 environment. Using AirSim, we generated about 100 image and depth maps from our environment and checked the confidence score of YOLOv3 applied to the images. YOLOv3 is real-time object detection system proposed by [8]. Note that we are using the YOLOv3’s original weights trained by COCO dataset.
+
+
+
+
+
+
+
+Using this dataset, we created a normalized histogram as shown in this figure of YOLOv3’s confidence score on detected objects given their distance from the camera. This figure clearly supports our mathematical modeling and claim that our uncertainty in confidence score increases with object’s distance from the camera.
+
+
+
+
+
+Simulation Results and Video Demonstration
+We developed a Thompson Sampling-based algorithm for ground robots with Sparse Bayesian Learning as inference that uses the sensing model proposed above. We call the resulting algorithm NATS (Noise-Aware Thompson Sampling).
+
+
+The figure here illustrates the performance of our proposed method NATS in a simulation setup. All algorithms are tested in a ground robot active search setting where 4 robots are trying to locate 5 OOIs randomly placed in an \(16 \times 16\) search area. The full recovery rate refers to rate of recovering all OOIs without declaring any false positives. From this figure we see that NATS significantly outperforms the following methods: 
+
+
+
+
+
+Point: Exhaustive search Rnd: random action selection  RSI: information-greedy method by [3] IG: information-greedy method that computes information as the negative entropy of NATS’s posterior   BinTS: NATS algorithm without sparsity assumption (NATS outperforming BinTS is evidence on the importance of sparsity that NATS takes into account)
+Below is a video demonstration of NATS applied to our game environment.
+
+
+
+
+Lastly, we invite the interested reader to check out our ICRA and UAI publications for more details on the algorithms and their performance analysis:
+R. Ghods, W. J. Durkin, J. Schneider, “Multi Agent Active Search using Realistic Depth-Aware Noise Model”, 2021 IEEE International Conference on Robotics Automation (ICRA), https://arxiv.org/pdf/2011.04825.pdfR. Ghods, A. Banerjee, J. Schneider, “Decentralized Multi-Agent Active Search for Sparse Signals”. 2021 Conference on Uncertainty in Artificial Intelligence (UAI), https://arxiv.org/pdf/2006.14718.pdf
+
+A Few References
+[1] Cyril Robin and Simon Lacroix. Multi-robot target detection and tracking: taxonomy and survey. Autonomous Robots, 40(4): 729–760, 2016.                                                                               
+[2] Daniel J Russo, Benjamin Van Roy, Abbas Kazerouni, Ian Osband, Zheng Wen, et al. A tutorial on Thompson sampling. Foundations and Trends® in Machine Learning, 11(1), 2018.
+[3] Yifei Ma, Roman Garnett, and Jeff Schneider. Active search for sparse signals with region sensing. In Thirty-First AAAI Conference on Artificial Intelligence, 2017.                                        
+[4] R. Mur-Artal, J. M. M. Montiel, and J. D. Tardos, “ORB-SLAM: a versatile and accurate monocular SLAM system,” IEEE Transactions on Robotics, vol. 31, no. 5, pp. 1147–1163, 2015.
+[5] B. A. Asfora, J. Banfi, and M. Campbell, “Mixed-integer linear programming models for multi-robot non-adversarial search,” IEEE Robotics and Automation Letters, 2020.                               
+[6] Epic Games, 2019. Unreal Engine, Available at: https://www.unrealengine.com.                          
+[7] S. Shah, D. Dey, C. Lovett, and A. Kapoor, “Airsim: High-fidelity visual and physical simulation for autonomous vehicles,” in Field and service robotics. Springer, 2018.
+[8] J. Redmon and A. Farhadi, “Yolov3: An incremental improvement,” arXiv preprint arXiv:1804.02767, 2018.
+[9] Zhilin Zhang and Bhaskar D Rao. Sparse signal recovery with temporally correlated source vectors using sparse Bayesian learning. IEEE Journal of Selected Topics in Signal Processing, 5(5):912–926, 2011.
+
+
+
+
+
+♥217
+ 7659
+ 1
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ PLAS: Latent Action Space for Offline Reinforcement Learning
+
+ See, Hear, Explore: Curiosity via Audio-Visual Association
+
+You Might Also Like
+
+
+
+On Learning Language-Invariant Representations for Universal Machine Translation
+October 23, 2020
+
+
+
+On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+May 12, 2023
+
+
+
+On Learning Invariant Representations for Domain Adaptation
+September 13, 2019
+
+
+
+1 Comment
+
+
+ 
+
+
+Reply 
+Xingshuai Dong
+March 22, 2022 at 7:28 AM
+Hi Ramina,
+Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? 
+Thank you very much.
+Best regards,
+Xingshuai
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+machine learning Research
+Decentralized Multi-Robot Active Search
+
+
+Authors
+Ramina Ghods 
+
+
+Affiliations
+
+
+Published
+                        June 4, 2021                    
+
+DOI
+
+
+
+
+
+
+
+
+Active Search (Active Sensing) in robotics refers to the problem of searching for objects of interest in an unknown environment by making data-collection decisions. Active Search has many applications including the search and rescue of human survivors following disasters, detecting gas leaks or locating and preventing animal poachers. Our focus in this work is to perform active search using aerial or ground robots. We intend to use multiple robots to parallelize and speed up the search.
+An example of active search in rescue missions using multiple aerial robots
+To perform active search using multiple robots, we need a technique to coordinate the actions of all robots and help them decide where to sense at every point in time. One way to approach this problem is to have a center plan and coordinate actions of all robots. This approach requires the center to maintain a synchronous and constant communication channel to all robots. However, maintaining constant communication is very difficult in certain applications, such as surveillance, exploration of unknown environments and search-and-rescue. For example, moving in an unknown or cluttered environment, it is very likely for robots to get trapped and temporarily lose their connection to the center [1]. As a result, a central coordinator that expects synchronicity from all robots at all times is not feasible as any robot failure or communication delay could disrupt the entire process. To clarify, we can still assume the robots are communicating with each other in a decentralized manner to share their observations. It is just that their communication links can be unreliable at times. 
+With this motivation in mind, we are interested in developing a decentralized multi-robot algorithm that helps robots independently decide where to go to sense at every point in time. This is typically viewed as the problem of intelligently choosing a waypoint to navigate towards. Each robot can use any available information shared from other robots’ sensed locations to decide which waypoint to navigate to next. Since communication between robots can be unreliable, our proposed algorithm must be able to use only partial information shared among robots and never depend on full information to make decisions. 
+Problem Setup
+Imagine sending multiple robots to a disaster-striken area to look for survivors (Objects of Interest (OOI)). The robots move around and collect information in the form of optical imagery passing through an object detector. We can also assume some robots have access to a form of depth map for the images.
+For our problem setup, robots are either aerial:
+
+or ground-based:
+
+
+We describe the mission environment with a vector \({\beta }\) which is zero everywhere except for the location of OOIs. We can write the sensing operation of a robot at time step t as \(y_t = x_t \beta + \epsilon_t\), where, \(x_t\) is the sensing action, and \(y_t\) and \(\epsilon_t\) are the observation and noise vectors. Robots share their measurements with each other whenever possible. At each time step \(t\), our objective is to have the robot use available measurements to choose a sensing action (waypoint) \(x_t\) that lets it best estimate the parameter \(\beta\).
+
+Challenges and Our Solutions
+1. Decentralized Coordination
+As discussed earlier we do not have access to a center to coordinate actions of all robots. To solve this problem, we propose using parallelized Asynchronous Thompson Sampling. Thompson Sampling (TS) is an online optimization method that balances between exploration and exploitation by maximizing the expected reward assuming that a sample from the posterior is the true state of the world. We believe TS is an excellent candidate for an asynchronous multi-agent online algorithm without a central planner. Essentially, by using a posterior sample in its reward function, TS allows for a calculated randomness in the reward that enables multiple agents to independently solve for different values that equally contribute to the overall goal of locating OOIs.
+
+
+In short, to start a new task, each robot in turn 1) Samples \(\beta^*\) from its posterior distribution of \(\beta\). 2) senses an area that the sample suggests include OOIs. 3) updates its measurements with the new sensing observation.
+
+
+
+
+
+2. Choice of Inference Method
+Our second challenge is the choice of inference method for \(\beta\). To perform active search, traditionally people have used coverage planning methods with exhaustive search. However, with the availability of observations with high and low uncertainty, an optimized active search method can locate OOIs faster than exhaustive search in terms of number of measurements. Such faster recovery is achievable due to the concept of sparse signal recovery which says that we can recover a sparse signal with size M by taking less than M linear measurements. By using sparse signal recovery as the inference method for TS, we can create the right balance between two modes: 1. exploring wider regions farther away from the robot with larger uncertainty 2. exploiting the regions we suspect of including an OOI by having robots move closer to them. 
+Facing a Problem with Thompson Sampling and Sparsity: Unfortunately, implementing TS given the sparse prior leads to poor performance because sparsity limits its exploration capability. We combat this problem in 2 steps. 
+Step 1. Detecting the Problem: We can associate this poor performance with one of the drawbacks of TS discussed in [2]. In general, TS’s myopic approach to optimizing the expected reward selects the sparse sensing action that promotes the immediate reward on the sparse estimate. As a result, TS will ignore wider sensing actions that can consider longer term optimality.
+Step 2. Proposing a Solution: We propose making an assumption on the prior distribution that the neighboring entries of the sparse vector \(\beta\) are spatially correlated, i.e. \(\beta\) is block sparse. We expect block sparsity to introduce exploration ability while also keeping sparsity a useful information in the recovery process. In particular, by gradually reducing the length of the blocks from a large value, we gently trade exploration with exploitation over time. 
+With the assumption of sparsity, each robot can use maximum a posteriori (MAP) estimation to solve for parameter beta, i.e. 
+$$\hat{\beta} = \text{argmax} \,\, p(\beta|\mathbf{Y_t},\mathbf{X_t})=\text{argmax} \,\, p(\beta)\,\, \prod_{(y_{t’},x_{t’}) \in (\mathbf{Y_t},\mathbf{X_t})}p(y_{t’}|\beta,x_{t’}),$$ 
+where \((\mathbf{Y_t},\mathbf{X_t})\) is the set of measurements available to the robot at time t. To promote block-sparsity, we use a block sparse prior \(p(\beta) = \mathcal{N} (0^{n \times 1},\Sigma_0)\), where: \(\Sigma_0 = diag([\gamma_1 B_1,…,\gamma_M B_M])\), with \(\gamma_m\) and \(B_m \in \mathcal{R}^{L \times L}\) \((m=1,..,M)\) as hyperparameters. Here, \(\gamma_m\) controls the sparsity of each block as is the case in sparse Bayesian learning methods [9], i.e. when \(\gamma_m=0\), the corresponding block \(m\) is zero. Here, \(L\) is the length of the blocks that we will gradually reduce in the TS process to gently trade exploration with exploitation. To avoid overfitting while estimating these hyperparameters, [9] suggests one matrix \(B=B_1=…=B_M\) to model all block covariances.
+For our likelihood distribution \(p(y_{t’}|\beta,x_{t’})\), we know from our problem setup that \(y_t = x_t \beta + \epsilon_t\) which means \(p(y_{t’}|\beta,x_{t’})=x_t \beta + p(\epsilon_t)\). In the next section, we will define a model for the observation noise distribution \(p(\epsilon_t)\).
+3. Modeling Observation Noise
+Our third challenge in this problem is choosing our observation model (sensing model). As described in the problem setup, our observation model needs to consider the practical side of fielding real sensors which includes applying object detection to the sensed images.
+
+
+In order to create a good sensing model, we consider our target algorithmic feature: enabling the robots to first explore wider regions from higher distance and then only get closer to locations the robots suspect to include an OOI. This feature is conceivable if we are realistically modeling actions from higher distance with higher uncertainty. Consequently, we need a sensing model that considers the notion of uncertainty in existence of objects based on their distance.
+
+
+
+
+
+
+Existing algorithms in general belong to one of two camps when modeling sensing capabilities of search agents. One camp is the field of robotics performing information gathering or simultaneous localization and mapping (SLAM)[4]. Existing algorithms in this field generally focus on uncertainty in location and ignore uncertainty in existence of objects. The second camp is the fields of signal processing (Compressed Sensing) and game theory (search theory) [5]. This field usually considers existence uncertainty (e.g. False Positives/Negative rates); however, they give no insight on how it is related to sensor capabilities and distance.
+Our Idea
+Our idea is to propose a practical sensing model that gets insight from both camps as follows. When a real, autonomous robot performs object detection on a sensed image, it reports detections probabilistically and its precision- recall curves degrade with distance between the object and the detector. In fact, we make the following claim.
+Claim. We expect the confidence score of an object detector to gradually decline as a function of the object’s distance from the camera (assuming fixed focal length).
+
+
+In particular, we model the performance of the robot’s object detector by formulating its confidence score for any object distance with an additive one-sided Gaussian noise as depicted in this Figure. Mathematically speaking, we will model the observation noise distribution in the problem setup as \(p(\epsilon_t) = \mathcal{N^+}(0,\sigma^2_\ell) \). The variance of this noise \(\sigma^2_\ell\)is our measure of “existence uncertainty” which in accordance to our claim increases with distance \(\ell\) between object and camera.
+
+
+Our Claim: Confidence score declines with object’s distance
+
+
+To back up this claim, we created our own pseudo-realistic environment using the Unreal Engine 4 (UE4) game development platform [6] with the Airsim plugin [7].
+
+
+
+We then randomly placed a large number of people and animals in our UE4 environment. Using AirSim, we generated about 100 image and depth maps from our environment and checked the confidence score of YOLOv3 applied to the images. YOLOv3 is real-time object detection system proposed by [8]. Note that we are using the YOLOv3’s original weights trained by COCO dataset.
+
+
+
+
+
+
+
+Using this dataset, we created a normalized histogram as shown in this figure of YOLOv3’s confidence score on detected objects given their distance from the camera. This figure clearly supports our mathematical modeling and claim that our uncertainty in confidence score increases with object’s distance from the camera.
+
+
+
+
+
+Simulation Results and Video Demonstration
+We developed a Thompson Sampling-based algorithm for ground robots with Sparse Bayesian Learning as inference that uses the sensing model proposed above. We call the resulting algorithm NATS (Noise-Aware Thompson Sampling).
+
+
+The figure here illustrates the performance of our proposed method NATS in a simulation setup. All algorithms are tested in a ground robot active search setting where 4 robots are trying to locate 5 OOIs randomly placed in an \(16 \times 16\) search area. The full recovery rate refers to rate of recovering all OOIs without declaring any false positives. From this figure we see that NATS significantly outperforms the following methods: 
+
+
+
+
+
+Point: Exhaustive search Rnd: random action selection  RSI: information-greedy method by [3] IG: information-greedy method that computes information as the negative entropy of NATS’s posterior   BinTS: NATS algorithm without sparsity assumption (NATS outperforming BinTS is evidence on the importance of sparsity that NATS takes into account)
+Below is a video demonstration of NATS applied to our game environment.
+
+
+
+
+Lastly, we invite the interested reader to check out our ICRA and UAI publications for more details on the algorithms and their performance analysis:
+R. Ghods, W. J. Durkin, J. Schneider, “Multi Agent Active Search using Realistic Depth-Aware Noise Model”, 2021 IEEE International Conference on Robotics Automation (ICRA), https://arxiv.org/pdf/2011.04825.pdfR. Ghods, A. Banerjee, J. Schneider, “Decentralized Multi-Agent Active Search for Sparse Signals”. 2021 Conference on Uncertainty in Artificial Intelligence (UAI), https://arxiv.org/pdf/2006.14718.pdf
+
+A Few References
+[1] Cyril Robin and Simon Lacroix. Multi-robot target detection and tracking: taxonomy and survey. Autonomous Robots, 40(4): 729–760, 2016.                                                                               
+[2] Daniel J Russo, Benjamin Van Roy, Abbas Kazerouni, Ian Osband, Zheng Wen, et al. A tutorial on Thompson sampling. Foundations and Trends® in Machine Learning, 11(1), 2018.
+[3] Yifei Ma, Roman Garnett, and Jeff Schneider. Active search for sparse signals with region sensing. In Thirty-First AAAI Conference on Artificial Intelligence, 2017.                                        
+[4] R. Mur-Artal, J. M. M. Montiel, and J. D. Tardos, “ORB-SLAM: a versatile and accurate monocular SLAM system,” IEEE Transactions on Robotics, vol. 31, no. 5, pp. 1147–1163, 2015.
+[5] B. A. Asfora, J. Banfi, and M. Campbell, “Mixed-integer linear programming models for multi-robot non-adversarial search,” IEEE Robotics and Automation Letters, 2020.                               
+[6] Epic Games, 2019. Unreal Engine, Available at: https://www.unrealengine.com.                          
+[7] S. Shah, D. Dey, C. Lovett, and A. Kapoor, “Airsim: High-fidelity visual and physical simulation for autonomous vehicles,” in Field and service robotics. Springer, 2018.
+[8] J. Redmon and A. Farhadi, “Yolov3: An incremental improvement,” arXiv preprint arXiv:1804.02767, 2018.
+[9] Zhilin Zhang and Bhaskar D Rao. Sparse signal recovery with temporally correlated source vectors using sparse Bayesian learning. IEEE Journal of Selected Topics in Signal Processing, 5(5):912–926, 2011.
+
+
+
+
+
+♥217
+ 7659
+ 1
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ PLAS: Latent Action Space for Offline Reinforcement Learning
+
+ See, Hear, Explore: Curiosity via Audio-Visual Association
+
+You Might Also Like
+
+
+
+On Learning Language-Invariant Representations for Universal Machine Translation
+October 23, 2020
+
+
+
+On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+May 12, 2023
+
+
+
+On Learning Invariant Representations for Domain Adaptation
+September 13, 2019
+
+
+
+1 Comment
+
+
+ 
+
+
+Reply 
+Xingshuai Dong
+March 22, 2022 at 7:28 AM
+Hi Ramina,
+Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? 
+Thank you very much.
+Best regards,
+Xingshuai
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+machine learning Research
+Decentralized Multi-Robot Active Search
+
+
+Authors
+Ramina Ghods 
+
+
+Affiliations
+
+
+Published
+                        June 4, 2021                    
+
+DOI
+
+
+
+
+
+
+
+
+Active Search (Active Sensing) in robotics refers to the problem of searching for objects of interest in an unknown environment by making data-collection decisions. Active Search has many applications including the search and rescue of human survivors following disasters, detecting gas leaks or locating and preventing animal poachers. Our focus in this work is to perform active search using aerial or ground robots. We intend to use multiple robots to parallelize and speed up the search.
+An example of active search in rescue missions using multiple aerial robots
+To perform active search using multiple robots, we need a technique to coordinate the actions of all robots and help them decide where to sense at every point in time. One way to approach this problem is to have a center plan and coordinate actions of all robots. This approach requires the center to maintain a synchronous and constant communication channel to all robots. However, maintaining constant communication is very difficult in certain applications, such as surveillance, exploration of unknown environments and search-and-rescue. For example, moving in an unknown or cluttered environment, it is very likely for robots to get trapped and temporarily lose their connection to the center [1]. As a result, a central coordinator that expects synchronicity from all robots at all times is not feasible as any robot failure or communication delay could disrupt the entire process. To clarify, we can still assume the robots are communicating with each other in a decentralized manner to share their observations. It is just that their communication links can be unreliable at times. 
+With this motivation in mind, we are interested in developing a decentralized multi-robot algorithm that helps robots independently decide where to go to sense at every point in time. This is typically viewed as the problem of intelligently choosing a waypoint to navigate towards. Each robot can use any available information shared from other robots’ sensed locations to decide which waypoint to navigate to next. Since communication between robots can be unreliable, our proposed algorithm must be able to use only partial information shared among robots and never depend on full information to make decisions. 
+Problem Setup
+Imagine sending multiple robots to a disaster-striken area to look for survivors (Objects of Interest (OOI)). The robots move around and collect information in the form of optical imagery passing through an object detector. We can also assume some robots have access to a form of depth map for the images.
+For our problem setup, robots are either aerial:
+
+or ground-based:
+
+
+We describe the mission environment with a vector \({\beta }\) which is zero everywhere except for the location of OOIs. We can write the sensing operation of a robot at time step t as \(y_t = x_t \beta + \epsilon_t\), where, \(x_t\) is the sensing action, and \(y_t\) and \(\epsilon_t\) are the observation and noise vectors. Robots share their measurements with each other whenever possible. At each time step \(t\), our objective is to have the robot use available measurements to choose a sensing action (waypoint) \(x_t\) that lets it best estimate the parameter \(\beta\).
+
+Challenges and Our Solutions
+1. Decentralized Coordination
+As discussed earlier we do not have access to a center to coordinate actions of all robots. To solve this problem, we propose using parallelized Asynchronous Thompson Sampling. Thompson Sampling (TS) is an online optimization method that balances between exploration and exploitation by maximizing the expected reward assuming that a sample from the posterior is the true state of the world. We believe TS is an excellent candidate for an asynchronous multi-agent online algorithm without a central planner. Essentially, by using a posterior sample in its reward function, TS allows for a calculated randomness in the reward that enables multiple agents to independently solve for different values that equally contribute to the overall goal of locating OOIs.
+
+
+In short, to start a new task, each robot in turn 1) Samples \(\beta^*\) from its posterior distribution of \(\beta\). 2) senses an area that the sample suggests include OOIs. 3) updates its measurements with the new sensing observation.
+
+
+
+
+
+2. Choice of Inference Method
+Our second challenge is the choice of inference method for \(\beta\). To perform active search, traditionally people have used coverage planning methods with exhaustive search. However, with the availability of observations with high and low uncertainty, an optimized active search method can locate OOIs faster than exhaustive search in terms of number of measurements. Such faster recovery is achievable due to the concept of sparse signal recovery which says that we can recover a sparse signal with size M by taking less than M linear measurements. By using sparse signal recovery as the inference method for TS, we can create the right balance between two modes: 1. exploring wider regions farther away from the robot with larger uncertainty 2. exploiting the regions we suspect of including an OOI by having robots move closer to them. 
+Facing a Problem with Thompson Sampling and Sparsity: Unfortunately, implementing TS given the sparse prior leads to poor performance because sparsity limits its exploration capability. We combat this problem in 2 steps. 
+Step 1. Detecting the Problem: We can associate this poor performance with one of the drawbacks of TS discussed in [2]. In general, TS’s myopic approach to optimizing the expected reward selects the sparse sensing action that promotes the immediate reward on the sparse estimate. As a result, TS will ignore wider sensing actions that can consider longer term optimality.
+Step 2. Proposing a Solution: We propose making an assumption on the prior distribution that the neighboring entries of the sparse vector \(\beta\) are spatially correlated, i.e. \(\beta\) is block sparse. We expect block sparsity to introduce exploration ability while also keeping sparsity a useful information in the recovery process. In particular, by gradually reducing the length of the blocks from a large value, we gently trade exploration with exploitation over time. 
+With the assumption of sparsity, each robot can use maximum a posteriori (MAP) estimation to solve for parameter beta, i.e. 
+$$\hat{\beta} = \text{argmax} \,\, p(\beta|\mathbf{Y_t},\mathbf{X_t})=\text{argmax} \,\, p(\beta)\,\, \prod_{(y_{t’},x_{t’}) \in (\mathbf{Y_t},\mathbf{X_t})}p(y_{t’}|\beta,x_{t’}),$$ 
+where \((\mathbf{Y_t},\mathbf{X_t})\) is the set of measurements available to the robot at time t. To promote block-sparsity, we use a block sparse prior \(p(\beta) = \mathcal{N} (0^{n \times 1},\Sigma_0)\), where: \(\Sigma_0 = diag([\gamma_1 B_1,…,\gamma_M B_M])\), with \(\gamma_m\) and \(B_m \in \mathcal{R}^{L \times L}\) \((m=1,..,M)\) as hyperparameters. Here, \(\gamma_m\) controls the sparsity of each block as is the case in sparse Bayesian learning methods [9], i.e. when \(\gamma_m=0\), the corresponding block \(m\) is zero. Here, \(L\) is the length of the blocks that we will gradually reduce in the TS process to gently trade exploration with exploitation. To avoid overfitting while estimating these hyperparameters, [9] suggests one matrix \(B=B_1=…=B_M\) to model all block covariances.
+For our likelihood distribution \(p(y_{t’}|\beta,x_{t’})\), we know from our problem setup that \(y_t = x_t \beta + \epsilon_t\) which means \(p(y_{t’}|\beta,x_{t’})=x_t \beta + p(\epsilon_t)\). In the next section, we will define a model for the observation noise distribution \(p(\epsilon_t)\).
+3. Modeling Observation Noise
+Our third challenge in this problem is choosing our observation model (sensing model). As described in the problem setup, our observation model needs to consider the practical side of fielding real sensors which includes applying object detection to the sensed images.
+
+
+In order to create a good sensing model, we consider our target algorithmic feature: enabling the robots to first explore wider regions from higher distance and then only get closer to locations the robots suspect to include an OOI. This feature is conceivable if we are realistically modeling actions from higher distance with higher uncertainty. Consequently, we need a sensing model that considers the notion of uncertainty in existence of objects based on their distance.
+
+
+
+
+
+
+Existing algorithms in general belong to one of two camps when modeling sensing capabilities of search agents. One camp is the field of robotics performing information gathering or simultaneous localization and mapping (SLAM)[4]. Existing algorithms in this field generally focus on uncertainty in location and ignore uncertainty in existence of objects. The second camp is the fields of signal processing (Compressed Sensing) and game theory (search theory) [5]. This field usually considers existence uncertainty (e.g. False Positives/Negative rates); however, they give no insight on how it is related to sensor capabilities and distance.
+Our Idea
+Our idea is to propose a practical sensing model that gets insight from both camps as follows. When a real, autonomous robot performs object detection on a sensed image, it reports detections probabilistically and its precision- recall curves degrade with distance between the object and the detector. In fact, we make the following claim.
+Claim. We expect the confidence score of an object detector to gradually decline as a function of the object’s distance from the camera (assuming fixed focal length).
+
+
+In particular, we model the performance of the robot’s object detector by formulating its confidence score for any object distance with an additive one-sided Gaussian noise as depicted in this Figure. Mathematically speaking, we will model the observation noise distribution in the problem setup as \(p(\epsilon_t) = \mathcal{N^+}(0,\sigma^2_\ell) \). The variance of this noise \(\sigma^2_\ell\)is our measure of “existence uncertainty” which in accordance to our claim increases with distance \(\ell\) between object and camera.
+
+
+Our Claim: Confidence score declines with object’s distance
+
+
+To back up this claim, we created our own pseudo-realistic environment using the Unreal Engine 4 (UE4) game development platform [6] with the Airsim plugin [7].
+
+
+
+We then randomly placed a large number of people and animals in our UE4 environment. Using AirSim, we generated about 100 image and depth maps from our environment and checked the confidence score of YOLOv3 applied to the images. YOLOv3 is real-time object detection system proposed by [8]. Note that we are using the YOLOv3’s original weights trained by COCO dataset.
+
+
+
+
+
+
+
+Using this dataset, we created a normalized histogram as shown in this figure of YOLOv3’s confidence score on detected objects given their distance from the camera. This figure clearly supports our mathematical modeling and claim that our uncertainty in confidence score increases with object’s distance from the camera.
+
+
+
+
+
+Simulation Results and Video Demonstration
+We developed a Thompson Sampling-based algorithm for ground robots with Sparse Bayesian Learning as inference that uses the sensing model proposed above. We call the resulting algorithm NATS (Noise-Aware Thompson Sampling).
+
+
+The figure here illustrates the performance of our proposed method NATS in a simulation setup. All algorithms are tested in a ground robot active search setting where 4 robots are trying to locate 5 OOIs randomly placed in an \(16 \times 16\) search area. The full recovery rate refers to rate of recovering all OOIs without declaring any false positives. From this figure we see that NATS significantly outperforms the following methods: 
+
+
+
+
+
+Point: Exhaustive search Rnd: random action selection  RSI: information-greedy method by [3] IG: information-greedy method that computes information as the negative entropy of NATS’s posterior   BinTS: NATS algorithm without sparsity assumption (NATS outperforming BinTS is evidence on the importance of sparsity that NATS takes into account)
+Below is a video demonstration of NATS applied to our game environment.
+
+
+
+
+Lastly, we invite the interested reader to check out our ICRA and UAI publications for more details on the algorithms and their performance analysis:
+R. Ghods, W. J. Durkin, J. Schneider, “Multi Agent Active Search using Realistic Depth-Aware Noise Model”, 2021 IEEE International Conference on Robotics Automation (ICRA), https://arxiv.org/pdf/2011.04825.pdfR. Ghods, A. Banerjee, J. Schneider, “Decentralized Multi-Agent Active Search for Sparse Signals”. 2021 Conference on Uncertainty in Artificial Intelligence (UAI), https://arxiv.org/pdf/2006.14718.pdf
+
+A Few References
+[1] Cyril Robin and Simon Lacroix. Multi-robot target detection and tracking: taxonomy and survey. Autonomous Robots, 40(4): 729–760, 2016.                                                                               
+[2] Daniel J Russo, Benjamin Van Roy, Abbas Kazerouni, Ian Osband, Zheng Wen, et al. A tutorial on Thompson sampling. Foundations and Trends® in Machine Learning, 11(1), 2018.
+[3] Yifei Ma, Roman Garnett, and Jeff Schneider. Active search for sparse signals with region sensing. In Thirty-First AAAI Conference on Artificial Intelligence, 2017.                                        
+[4] R. Mur-Artal, J. M. M. Montiel, and J. D. Tardos, “ORB-SLAM: a versatile and accurate monocular SLAM system,” IEEE Transactions on Robotics, vol. 31, no. 5, pp. 1147–1163, 2015.
+[5] B. A. Asfora, J. Banfi, and M. Campbell, “Mixed-integer linear programming models for multi-robot non-adversarial search,” IEEE Robotics and Automation Letters, 2020.                               
+[6] Epic Games, 2019. Unreal Engine, Available at: https://www.unrealengine.com.                          
+[7] S. Shah, D. Dey, C. Lovett, and A. Kapoor, “Airsim: High-fidelity visual and physical simulation for autonomous vehicles,” in Field and service robotics. Springer, 2018.
+[8] J. Redmon and A. Farhadi, “Yolov3: An incremental improvement,” arXiv preprint arXiv:1804.02767, 2018.
+[9] Zhilin Zhang and Bhaskar D Rao. Sparse signal recovery with temporally correlated source vectors using sparse Bayesian learning. IEEE Journal of Selected Topics in Signal Processing, 5(5):912–926, 2011.
+
+
+
+
+
+♥217
+ 7659
+ 1
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ PLAS: Latent Action Space for Offline Reinforcement Learning
+
+ See, Hear, Explore: Curiosity via Audio-Visual Association
+
+You Might Also Like
+
+
+
+On Learning Language-Invariant Representations for Universal Machine Translation
+October 23, 2020
+
+
+
+On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+May 12, 2023
+
+
+
+On Learning Invariant Representations for Domain Adaptation
+September 13, 2019
+
+
+
+1 Comment
+
+
+ 
+
+
+Reply 
+Xingshuai Dong
+March 22, 2022 at 7:28 AM
+Hi Ramina,
+Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? 
+Thank you very much.
+Best regards,
+Xingshuai
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+machine learning Research
+Decentralized Multi-Robot Active Search
+
+
+Authors
+Ramina Ghods 
+
+
+Affiliations
+
+
+Published
+                        June 4, 2021                    
+
+DOI
+
+
+
+
+Authors
+Ramina Ghods 
+
+
+Affiliations
+
+
+Published
+                        June 4, 2021                    
+
+DOI
+
+
+Authors
+Ramina Ghods 
+Affiliations
+
+Published
+                        June 4, 2021                    
+DOI
+
+
+
+
+Active Search (Active Sensing) in robotics refers to the problem of searching for objects of interest in an unknown environment by making data-collection decisions. Active Search has many applications including the search and rescue of human survivors following disasters, detecting gas leaks or locating and preventing animal poachers. Our focus in this work is to perform active search using aerial or ground robots. We intend to use multiple robots to parallelize and speed up the search.
+An example of active search in rescue missions using multiple aerial robots
+To perform active search using multiple robots, we need a technique to coordinate the actions of all robots and help them decide where to sense at every point in time. One way to approach this problem is to have a center plan and coordinate actions of all robots. This approach requires the center to maintain a synchronous and constant communication channel to all robots. However, maintaining constant communication is very difficult in certain applications, such as surveillance, exploration of unknown environments and search-and-rescue. For example, moving in an unknown or cluttered environment, it is very likely for robots to get trapped and temporarily lose their connection to the center [1]. As a result, a central coordinator that expects synchronicity from all robots at all times is not feasible as any robot failure or communication delay could disrupt the entire process. To clarify, we can still assume the robots are communicating with each other in a decentralized manner to share their observations. It is just that their communication links can be unreliable at times. 
+With this motivation in mind, we are interested in developing a decentralized multi-robot algorithm that helps robots independently decide where to go to sense at every point in time. This is typically viewed as the problem of intelligently choosing a waypoint to navigate towards. Each robot can use any available information shared from other robots’ sensed locations to decide which waypoint to navigate to next. Since communication between robots can be unreliable, our proposed algorithm must be able to use only partial information shared among robots and never depend on full information to make decisions. 
+Problem Setup
+Imagine sending multiple robots to a disaster-striken area to look for survivors (Objects of Interest (OOI)). The robots move around and collect information in the form of optical imagery passing through an object detector. We can also assume some robots have access to a form of depth map for the images.
+For our problem setup, robots are either aerial:
+
+or ground-based:
+
+
+We describe the mission environment with a vector \({\beta }\) which is zero everywhere except for the location of OOIs. We can write the sensing operation of a robot at time step t as \(y_t = x_t \beta + \epsilon_t\), where, \(x_t\) is the sensing action, and \(y_t\) and \(\epsilon_t\) are the observation and noise vectors. Robots share their measurements with each other whenever possible. At each time step \(t\), our objective is to have the robot use available measurements to choose a sensing action (waypoint) \(x_t\) that lets it best estimate the parameter \(\beta\).
+
+Challenges and Our Solutions
+1. Decentralized Coordination
+As discussed earlier we do not have access to a center to coordinate actions of all robots. To solve this problem, we propose using parallelized Asynchronous Thompson Sampling. Thompson Sampling (TS) is an online optimization method that balances between exploration and exploitation by maximizing the expected reward assuming that a sample from the posterior is the true state of the world. We believe TS is an excellent candidate for an asynchronous multi-agent online algorithm without a central planner. Essentially, by using a posterior sample in its reward function, TS allows for a calculated randomness in the reward that enables multiple agents to independently solve for different values that equally contribute to the overall goal of locating OOIs.
+
+
+In short, to start a new task, each robot in turn 1) Samples \(\beta^*\) from its posterior distribution of \(\beta\). 2) senses an area that the sample suggests include OOIs. 3) updates its measurements with the new sensing observation.
+
+
+
+
+
+2. Choice of Inference Method
+Our second challenge is the choice of inference method for \(\beta\). To perform active search, traditionally people have used coverage planning methods with exhaustive search. However, with the availability of observations with high and low uncertainty, an optimized active search method can locate OOIs faster than exhaustive search in terms of number of measurements. Such faster recovery is achievable due to the concept of sparse signal recovery which says that we can recover a sparse signal with size M by taking less than M linear measurements. By using sparse signal recovery as the inference method for TS, we can create the right balance between two modes: 1. exploring wider regions farther away from the robot with larger uncertainty 2. exploiting the regions we suspect of including an OOI by having robots move closer to them. 
+Facing a Problem with Thompson Sampling and Sparsity: Unfortunately, implementing TS given the sparse prior leads to poor performance because sparsity limits its exploration capability. We combat this problem in 2 steps. 
+Step 1. Detecting the Problem: We can associate this poor performance with one of the drawbacks of TS discussed in [2]. In general, TS’s myopic approach to optimizing the expected reward selects the sparse sensing action that promotes the immediate reward on the sparse estimate. As a result, TS will ignore wider sensing actions that can consider longer term optimality.
+Step 2. Proposing a Solution: We propose making an assumption on the prior distribution that the neighboring entries of the sparse vector \(\beta\) are spatially correlated, i.e. \(\beta\) is block sparse. We expect block sparsity to introduce exploration ability while also keeping sparsity a useful information in the recovery process. In particular, by gradually reducing the length of the blocks from a large value, we gently trade exploration with exploitation over time. 
+With the assumption of sparsity, each robot can use maximum a posteriori (MAP) estimation to solve for parameter beta, i.e. 
+$$\hat{\beta} = \text{argmax} \,\, p(\beta|\mathbf{Y_t},\mathbf{X_t})=\text{argmax} \,\, p(\beta)\,\, \prod_{(y_{t’},x_{t’}) \in (\mathbf{Y_t},\mathbf{X_t})}p(y_{t’}|\beta,x_{t’}),$$ 
+where \((\mathbf{Y_t},\mathbf{X_t})\) is the set of measurements available to the robot at time t. To promote block-sparsity, we use a block sparse prior \(p(\beta) = \mathcal{N} (0^{n \times 1},\Sigma_0)\), where: \(\Sigma_0 = diag([\gamma_1 B_1,…,\gamma_M B_M])\), with \(\gamma_m\) and \(B_m \in \mathcal{R}^{L \times L}\) \((m=1,..,M)\) as hyperparameters. Here, \(\gamma_m\) controls the sparsity of each block as is the case in sparse Bayesian learning methods [9], i.e. when \(\gamma_m=0\), the corresponding block \(m\) is zero. Here, \(L\) is the length of the blocks that we will gradually reduce in the TS process to gently trade exploration with exploitation. To avoid overfitting while estimating these hyperparameters, [9] suggests one matrix \(B=B_1=…=B_M\) to model all block covariances.
+For our likelihood distribution \(p(y_{t’}|\beta,x_{t’})\), we know from our problem setup that \(y_t = x_t \beta + \epsilon_t\) which means \(p(y_{t’}|\beta,x_{t’})=x_t \beta + p(\epsilon_t)\). In the next section, we will define a model for the observation noise distribution \(p(\epsilon_t)\).
+3. Modeling Observation Noise
+Our third challenge in this problem is choosing our observation model (sensing model). As described in the problem setup, our observation model needs to consider the practical side of fielding real sensors which includes applying object detection to the sensed images.
+
+
+In order to create a good sensing model, we consider our target algorithmic feature: enabling the robots to first explore wider regions from higher distance and then only get closer to locations the robots suspect to include an OOI. This feature is conceivable if we are realistically modeling actions from higher distance with higher uncertainty. Consequently, we need a sensing model that considers the notion of uncertainty in existence of objects based on their distance.
+
+
+
+
+
+
+Existing algorithms in general belong to one of two camps when modeling sensing capabilities of search agents. One camp is the field of robotics performing information gathering or simultaneous localization and mapping (SLAM)[4]. Existing algorithms in this field generally focus on uncertainty in location and ignore uncertainty in existence of objects. The second camp is the fields of signal processing (Compressed Sensing) and game theory (search theory) [5]. This field usually considers existence uncertainty (e.g. False Positives/Negative rates); however, they give no insight on how it is related to sensor capabilities and distance.
+Our Idea
+Our idea is to propose a practical sensing model that gets insight from both camps as follows. When a real, autonomous robot performs object detection on a sensed image, it reports detections probabilistically and its precision- recall curves degrade with distance between the object and the detector. In fact, we make the following claim.
+Claim. We expect the confidence score of an object detector to gradually decline as a function of the object’s distance from the camera (assuming fixed focal length).
+
+
+In particular, we model the performance of the robot’s object detector by formulating its confidence score for any object distance with an additive one-sided Gaussian noise as depicted in this Figure. Mathematically speaking, we will model the observation noise distribution in the problem setup as \(p(\epsilon_t) = \mathcal{N^+}(0,\sigma^2_\ell) \). The variance of this noise \(\sigma^2_\ell\)is our measure of “existence uncertainty” which in accordance to our claim increases with distance \(\ell\) between object and camera.
+
+
+Our Claim: Confidence score declines with object’s distance
+
+
+To back up this claim, we created our own pseudo-realistic environment using the Unreal Engine 4 (UE4) game development platform [6] with the Airsim plugin [7].
+
+
+
+We then randomly placed a large number of people and animals in our UE4 environment. Using AirSim, we generated about 100 image and depth maps from our environment and checked the confidence score of YOLOv3 applied to the images. YOLOv3 is real-time object detection system proposed by [8]. Note that we are using the YOLOv3’s original weights trained by COCO dataset.
+
+
+
+
+
+
+
+Using this dataset, we created a normalized histogram as shown in this figure of YOLOv3’s confidence score on detected objects given their distance from the camera. This figure clearly supports our mathematical modeling and claim that our uncertainty in confidence score increases with object’s distance from the camera.
+
+
+
+
+
+Simulation Results and Video Demonstration
+We developed a Thompson Sampling-based algorithm for ground robots with Sparse Bayesian Learning as inference that uses the sensing model proposed above. We call the resulting algorithm NATS (Noise-Aware Thompson Sampling).
+
+
+The figure here illustrates the performance of our proposed method NATS in a simulation setup. All algorithms are tested in a ground robot active search setting where 4 robots are trying to locate 5 OOIs randomly placed in an \(16 \times 16\) search area. The full recovery rate refers to rate of recovering all OOIs without declaring any false positives. From this figure we see that NATS significantly outperforms the following methods: 
+
+
+
+
+
+Point: Exhaustive search Rnd: random action selection  RSI: information-greedy method by [3] IG: information-greedy method that computes information as the negative entropy of NATS’s posterior   BinTS: NATS algorithm without sparsity assumption (NATS outperforming BinTS is evidence on the importance of sparsity that NATS takes into account)
+Below is a video demonstration of NATS applied to our game environment.
+
+
+
+
+Lastly, we invite the interested reader to check out our ICRA and UAI publications for more details on the algorithms and their performance analysis:
+R. Ghods, W. J. Durkin, J. Schneider, “Multi Agent Active Search using Realistic Depth-Aware Noise Model”, 2021 IEEE International Conference on Robotics Automation (ICRA), https://arxiv.org/pdf/2011.04825.pdfR. Ghods, A. Banerjee, J. Schneider, “Decentralized Multi-Agent Active Search for Sparse Signals”. 2021 Conference on Uncertainty in Artificial Intelligence (UAI), https://arxiv.org/pdf/2006.14718.pdf
+
+A Few References
+[1] Cyril Robin and Simon Lacroix. Multi-robot target detection and tracking: taxonomy and survey. Autonomous Robots, 40(4): 729–760, 2016.                                                                               
+[2] Daniel J Russo, Benjamin Van Roy, Abbas Kazerouni, Ian Osband, Zheng Wen, et al. A tutorial on Thompson sampling. Foundations and Trends® in Machine Learning, 11(1), 2018.
+[3] Yifei Ma, Roman Garnett, and Jeff Schneider. Active search for sparse signals with region sensing. In Thirty-First AAAI Conference on Artificial Intelligence, 2017.                                        
+[4] R. Mur-Artal, J. M. M. Montiel, and J. D. Tardos, “ORB-SLAM: a versatile and accurate monocular SLAM system,” IEEE Transactions on Robotics, vol. 31, no. 5, pp. 1147–1163, 2015.
+[5] B. A. Asfora, J. Banfi, and M. Campbell, “Mixed-integer linear programming models for multi-robot non-adversarial search,” IEEE Robotics and Automation Letters, 2020.                               
+[6] Epic Games, 2019. Unreal Engine, Available at: https://www.unrealengine.com.                          
+[7] S. Shah, D. Dey, C. Lovett, and A. Kapoor, “Airsim: High-fidelity visual and physical simulation for autonomous vehicles,” in Field and service robotics. Springer, 2018.
+[8] J. Redmon and A. Farhadi, “Yolov3: An incremental improvement,” arXiv preprint arXiv:1804.02767, 2018.
+[9] Zhilin Zhang and Bhaskar D Rao. Sparse signal recovery with temporally correlated source vectors using sparse Bayesian learning. IEEE Journal of Selected Topics in Signal Processing, 5(5):912–926, 2011.
+An example of active search in rescue missions using multiple aerial robots
+We describe the mission environment with a vector \({\beta }\) which is zero everywhere except for the location of OOIs. We can write the sensing operation of a robot at time step t as \(y_t = x_t \beta + \epsilon_t\), where, \(x_t\) is the sensing action, and \(y_t\) and \(\epsilon_t\) are the observation and noise vectors. Robots share their measurements with each other whenever possible. At each time step \(t\), our objective is to have the robot use available measurements to choose a sensing action (waypoint) \(x_t\) that lets it best estimate the parameter \(\beta\).
+
+We describe the mission environment with a vector \({\beta }\) which is zero everywhere except for the location of OOIs. We can write the sensing operation of a robot at time step t as \(y_t = x_t \beta + \epsilon_t\), where, \(x_t\) is the sensing action, and \(y_t\) and \(\epsilon_t\) are the observation and noise vectors. Robots share their measurements with each other whenever possible. At each time step \(t\), our objective is to have the robot use available measurements to choose a sensing action (waypoint) \(x_t\) that lets it best estimate the parameter \(\beta\).
+
+
+In short, to start a new task, each robot in turn 1) Samples \(\beta^*\) from its posterior distribution of \(\beta\). 2) senses an area that the sample suggests include OOIs. 3) updates its measurements with the new sensing observation.
+
+
+
+
+
+In short, to start a new task, each robot in turn 1) Samples \(\beta^*\) from its posterior distribution of \(\beta\). 2) senses an area that the sample suggests include OOIs. 3) updates its measurements with the new sensing observation.
+
+
+
+
+In order to create a good sensing model, we consider our target algorithmic feature: enabling the robots to first explore wider regions from higher distance and then only get closer to locations the robots suspect to include an OOI. This feature is conceivable if we are realistically modeling actions from higher distance with higher uncertainty. Consequently, we need a sensing model that considers the notion of uncertainty in existence of objects based on their distance.
+
+
+
+
+
+
+In order to create a good sensing model, we consider our target algorithmic feature: enabling the robots to first explore wider regions from higher distance and then only get closer to locations the robots suspect to include an OOI. This feature is conceivable if we are realistically modeling actions from higher distance with higher uncertainty. Consequently, we need a sensing model that considers the notion of uncertainty in existence of objects based on their distance.
+
+
+
+
+
+In particular, we model the performance of the robot’s object detector by formulating its confidence score for any object distance with an additive one-sided Gaussian noise as depicted in this Figure. Mathematically speaking, we will model the observation noise distribution in the problem setup as \(p(\epsilon_t) = \mathcal{N^+}(0,\sigma^2_\ell) \). The variance of this noise \(\sigma^2_\ell\)is our measure of “existence uncertainty” which in accordance to our claim increases with distance \(\ell\) between object and camera.
+
+
+Our Claim: Confidence score declines with object’s distance
+
+
+In particular, we model the performance of the robot’s object detector by formulating its confidence score for any object distance with an additive one-sided Gaussian noise as depicted in this Figure. Mathematically speaking, we will model the observation noise distribution in the problem setup as \(p(\epsilon_t) = \mathcal{N^+}(0,\sigma^2_\ell) \). The variance of this noise \(\sigma^2_\ell\)is our measure of “existence uncertainty” which in accordance to our claim increases with distance \(\ell\) between object and camera.
+
+Our Claim: Confidence score declines with object’s distance
+
+
+We then randomly placed a large number of people and animals in our UE4 environment. Using AirSim, we generated about 100 image and depth maps from our environment and checked the confidence score of YOLOv3 applied to the images. YOLOv3 is real-time object detection system proposed by [8]. Note that we are using the YOLOv3’s original weights trained by COCO dataset.
+
+
+
+
+
+We then randomly placed a large number of people and animals in our UE4 environment. Using AirSim, we generated about 100 image and depth maps from our environment and checked the confidence score of YOLOv3 applied to the images. YOLOv3 is real-time object detection system proposed by [8]. Note that we are using the YOLOv3’s original weights trained by COCO dataset.
+
+
+
+
+Using this dataset, we created a normalized histogram as shown in this figure of YOLOv3’s confidence score on detected objects given their distance from the camera. This figure clearly supports our mathematical modeling and claim that our uncertainty in confidence score increases with object’s distance from the camera.
+
+
+
+
+
+Using this dataset, we created a normalized histogram as shown in this figure of YOLOv3’s confidence score on detected objects given their distance from the camera. This figure clearly supports our mathematical modeling and claim that our uncertainty in confidence score increases with object’s distance from the camera.
+
+
+
+
+The figure here illustrates the performance of our proposed method NATS in a simulation setup. All algorithms are tested in a ground robot active search setting where 4 robots are trying to locate 5 OOIs randomly placed in an \(16 \times 16\) search area. The full recovery rate refers to rate of recovering all OOIs without declaring any false positives. From this figure we see that NATS significantly outperforms the following methods: 
+
+
+
+
+
+The figure here illustrates the performance of our proposed method NATS in a simulation setup. All algorithms are tested in a ground robot active search setting where 4 robots are trying to locate 5 OOIs randomly placed in an \(16 \times 16\) search area. The full recovery rate refers to rate of recovering all OOIs without declaring any false positives. From this figure we see that NATS significantly outperforms the following methods: 
+
+
+
+
+
+♥217
+ 7659
+ 1
+You Might Also Like
+
+
+On Learning Language-Invariant Representations for Universal Machine Translation
+October 23, 2020
+
+
+
+On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+May 12, 2023
+
+
+
+On Learning Invariant Representations for Domain Adaptation
+September 13, 2019
+
+
+
+On Learning Language-Invariant Representations for Universal Machine Translation
+October 23, 2020
+
+
+On Privacy and Personalization in Federated Learning: A Retrospective on the US/UK PETs Challenge
+May 12, 2023
+
+
+On Learning Invariant Representations for Domain Adaptation
+September 13, 2019
+
+1 Comment
+
+
+ 
+
+
+Reply 
+Xingshuai Dong
+March 22, 2022 at 7:28 AM
+Hi Ramina,
+Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? 
+Thank you very much.
+Best regards,
+Xingshuai
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+1 Comment
+
+
+ 
+
+
+Reply 
+Xingshuai Dong
+March 22, 2022 at 7:28 AM
+Hi Ramina,
+Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? 
+Thank you very much.
+Best regards,
+Xingshuai
+
+
+
+ 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+1 Comment
+
+
+ 
+
+
+Reply 
+Xingshuai Dong
+March 22, 2022 at 7:28 AM
+Hi Ramina,
+Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? 
+Thank you very much.
+Best regards,
+Xingshuai
+
+
+
+
+
+
+ 
+
+
+Reply 
+Xingshuai Dong
+March 22, 2022 at 7:28 AM
+Hi Ramina,
+Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? 
+Thank you very much.
+Best regards,
+Xingshuai
+
+
+
+
+ 
+
+
+Reply 
+Xingshuai Dong
+March 22, 2022 at 7:28 AM
+Hi Ramina,
+Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? 
+Thank you very much.
+Best regards,
+Xingshuai
+
+
+ 
+
+Reply 
+Xingshuai Dong
+March 22, 2022 at 7:28 AM
+Hi Ramina,
+Very nice work. I am very interested in it. May I check with you how to visualize the motion of robots and visited cells in the grid map? 
+Thank you very much.
+Best regards,
+Xingshuai
+
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+ 
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+  [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+[instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+

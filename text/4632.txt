@@ -1,0 +1,1404 @@
+In social domains, machine learning algorithms often prompt individuals to strategically modify their observable attributes to receive more favorable predictions. As a result, the distribution the predictive model is trained on may differ from the one it operates on in deployment. While such distribution shifts, in general, hinder accurate predictions, we identify a unique opportunity associated with shifts due to strategic responses. In particular, we show that we can use strategic responses effectively to recover causal relationships between observable features and the outcomes we wish to predict. More specifically, we study a game-theoretic model in which a decision-maker deploys a sequence of models to predict an outcome of interest (e.g., college GPA) for a sequence of strategic agents (e.g., college applicants). In response, strategic agents invest efforts and modify their features for better predictions. In such settings, unobserved confounding variables (e.g., family educational background) can influence both an agent’s observable features (e.g., high school records) and outcomes (e.g., college GPA). Because of this, standard regression methods such as ordinary least squares (OLS) generally produce biased estimators. In order to address this issue, we establish a connection between strategic responses to machine learning models and instrumental variable (IV) regression, a well-studied tool in econometrics, by observing that the sequence of deployed models can be viewed as an instrument that affects agents’ observable features, but does not directly influence their outcomes. Therefore, two-stage least squares (2SLS) regression can be used to recover the causal relationships between observable features and outcomes. Beyond causal recovery, we can use quantities learned during our 2SLS procedure to address two common optimization objectives in strategic regression: agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that they compare favorably to OLS.When strategic agents are evaluated by algorithmic assessment tools in high-stakes situations (such as lending, education, or employment), they will modify their observable features in order to achieve a more favorable outcome. This notion is captured succinctly by Goodhart’s Law, a well-known adage by British economist Charles Goodhart, which states that“When a measure becomes a target, it ceases to be a good measure.”With this idea in mind, the quickly-growing field of strategic classification/regression aims to formalize the interaction between a decision-maker, or principal, and a series of decision-subjects (often referred to as agents) as a repeated Stackelberg game (e.g., Hardt et al., 2015, Dong et al., 2018, Milli et al., 2019). At each time \(t\), a new agent from the population interacts with the decision-maker. As a running example, consider a university (principal) which decides whether to accept or reject students (agents) on a rolling basis. The principal moves first, announcing a decision rule \(f(\boldsymbol{\theta}_t, \mathbf{x}_t)\), parameterized by \(\boldsymbol{\theta}_t\), which takes a set of observable features \(\mathbf{x}_t\) as input and produces a prediction \(\hat{y}_t\) as output. Having observed the decision rule \(\boldsymbol{\theta}_t\), agent \(t\) best responds by strategically modifying his observable features in order to receive a higher prediction score, subject to some cost for doing so. In our college admissions example, this would correspond to the university telling each student which qualities they value in an applicant (and to what extent they value them), and each applicant taking some action to improve their chances of being accepted (e.g., studying to improve their high school GPA). Most of the work in the strategic regression literature assumes the principal deploys a linear decision rule, i.e., \(f(\boldsymbol{\theta}_t, \mathbf{x}_t) = \mathbf{x}_t^\top \boldsymbol{\theta}_t\). While this assumption may limit the space of models the principal has at her disposal, it makes the agent’s best-response calculation tractable.While the goal of each agent in the strategic regression setting is well-defined, the right objective for the principal is less obvious and is often dependent on the specific setting being considered. For example, the original work on learning under strategic responses (Hardt et al., 2015) views all feature manipulation as undesirable “gaming,” and seeks to design decision rules which minimize predictive risk under agent feature manipulation. More recent work (Kleinberg & Raghavan, 2019) makes a distinction between feature gaming and improvement, i.e., feature manipulation which leads to a positive change in the agent’s true label \(y_t\). Finally, a third line of work (Shavit et al., 2020) aims to recover causal relationships between observable features \(\mathbf{x}_t\) and outcomes \(y_t\), although these methods are only applicable under settings in which all of the agent’s features that causally affect \(y_t\) are observable to the principal. We build upon these lines of work by making the observation that the sequence of decision rules deployed by the principal can be viewed as a valid instrument, which allows us to recover causal relationships between observable features and outcomes without making the assumption that all of an agent’s features are observable. Using knowledge of these causal relationships, we then provide algorithms for agent improvement and predictive risk minimization.Before getting to our method, we quickly review the basics of Instrumental Variable (IV) regression. Imagine a situation in which a researcher is trying to estimate the causal effect that ice cream consumption has on getting sunburned. The researcher asks a group of randomly selected participants about their ice cream consumption levels, and finds that participants who consume ice cream are more likely to get sunburned in the near future. Without taking any additional variables into consideration, the researcher may come to the incorrect conclusion that eating ice cream causes one to become sunburned!IV Regression (Angrist and Krueger, 2001) is a family of methods used to estimate causal relationships between independent and dependent variables when there exist omitted variables that affect both directly. In our ice cream example, the weather is an omitted variable that causes confounding by directly affecting both ice cream consumption levels and the likelihood of getting sunburned.We focus on two-stage least-squares (2SLS) regression (Angrist and Imbens, 1992), a kind of IV estimator. 2SLS independently estimates the relationship between an instrumental variable \(\boldsymbol{\theta}_t\) and the independent variables \(\mathbf{x}_t\), as well as the relationship between \(\boldsymbol{\theta}_t\) and the dependent variable \(y_t\), via simple least squares regression. Formally, given \(T\) samples, 2SLS estimates the true causal relationship \(\boldsymbol{\theta}^*\) between \(\mathbf{x}_t\) and \(y_t\) through the following procedure:Intuitively, 2SLS allows for an unbiased estimate of \(\boldsymbol{\theta}^*\) by using the instrumental variable \(\boldsymbol{\theta}_t\) as a source of “controlled randomness.” By varying \(\boldsymbol{\theta}_t\), we can observe the change in \(\mathbf{x}_t\) and the change in \(y_t\), which allows us to estimate the direct effect \(\mathbf{x}_t\) has on \(y_t\).In this strategic regression setting, we make the observation that the assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are valid instruments. Therefore, we can perform IV regression to estimate the true causal parameters \(\boldsymbol{\theta}^*\). There are two criteria for \(\boldsymbol{\theta}_t\) to be a valid instrument: (1) \(\boldsymbol{\theta}_t\) directly influences the observable features \(\mathbf{x}_t\) and only influences the outcome \(y_t\) through \(\mathbf{x}_t\), and (2) \(\boldsymbol{\theta}_t\) is independent from any unobservable confounding variables. In our setting, this confounding term is represented by the agent’s private type \(u_t\) (see Figure 2 for more information). Criterion (1) is satisfied by the structure of the strategic regression setting. We aim to design a mechanism that satisfies criterion (2) by choosing assessment rule \(\boldsymbol{\theta}_t\) randomly, independent of the private type \(u_t\). As can be seen by the graphical model of our setting, the principal’s assessment rule \(\boldsymbol{\theta}_t\) satisfies these criteria.Under mild restrictions on the agent population, if the principal plays a sequence of random assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) with component-wise variance at least \(\sigma_{\theta}^2\), our estimate \(\widehat{\boldsymbol{\theta}}\) approaches the true causal parameters \(\boldsymbol{\theta}^*\) at a rate of \(\mathcal{O}(\sigma_{\theta}^{-2} T^{-1/2})\), with high probability. Note that while we require the principal to play random assessment rules in order to achieve our bound, we make no assumption on the mean values of the distribution \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are drawn from, meaning that the principal can play random perturbations of a “reasonable” assessment rule in order to achieve the desired bound.In some settings, it may be enough for the principal to discover the true relationship between the observable features \(\mathbf{x}_t\) and outcome \(y_t\). However in other settings, the principal may wish to take a more active role. We explore two additional goals the principal may have, agent outcome maximization and predictive risk minimization, both of which are common goals in the strategic regression literature.In the agent outcome maximization setting, the goal of the principal is to maximize the expected outcome \(\mathbb{E}[y_t]\) of an agent from the agent population. In our running college admissions example, this would correspond to deploying an assessment rule with the goal of maximizing expected student college GPA. Note that \(\boldsymbol{\theta}^{AO}\), the assessment rule which maximizes \(\mathbb{E}[y_t]\), need not be equal to the causal parameters \(\boldsymbol{\theta}^*\). Formally, we aim to find \(\boldsymbol{\theta}^{AO}\) in a convex set \(\mathcal{C}\) of feasible assessment rules such that the induced expected agent outcome \(\mathbb{E}[y_t]\) is maximized. We can formulate the problem of recovering \(\boldsymbol{\theta}^{AO}\) as a convex optimization problem with a linear objective function and constraint that \(\boldsymbol{\theta}^{AO}\) lie in \(\mathcal{C}\). While this optimization has an explicit dependence on \(\boldsymbol{\theta}^*\), the principal has all the information required to solve the optimization if she has already ran 2SLS to recover a sufficiently accurate estimate of the causal parameters \(\boldsymbol{\theta}^*\).On the other hand, the goal of the principal in the predictive risk minimization setting is to learn the assessment rule that minimizes \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\), the expected squared difference between an agent’s true outcome and the outcome predicted by the principal. Similar to the agent outcome maximization setting, the principal will be able to calculate the gradient of \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\) after having recovered a sufficiently accurate estimate of \(\boldsymbol{\theta}^*\). Due to the dependence of \(\mathbf{x}_t\) and \(y_t\) on the assessment rule deployed by the principal, the predictive risk function will be nonconvex in general, and can have several extrema which are not global minima, even in the case of just one observable feature. Because of this, natural learning dynamics like online gradient descent will generally only converge to local minima of the predictive risk function.We empirically evaluate our model on a semi-synthetic dataset based on our running university admissions example, and compare our 2SLS-based method against OLS, which directly regresses observed outcomes \(y\) on observable features \(\mathbf{x}\). We constructed our semi-synthetic dataset by modifying the SATGPA dataset, a publicly available dataset which contains statistics on 1000 college students. We use high school (HS) grades, as measured by grade point average (GPA) and SAT score as observable features, and college GPA as the outcome. Using OLS, we find that the effect of [SAT, HS GPA] on college GPA in this dataset is \(\boldsymbol{\theta}^*= [0.0015, 0.5895]\). We then construct synthetic data that is based on this original data, yet incorporates confounding factors. For simplicity, we let the true effect \(\boldsymbol{\theta}^* = [0, 0.5]\). That is, we assume HS GPA affects college GPA, but SAT score does not. We consider two private types of applicant backgrounds: disadvantaged and advantaged. Disadvantaged applicants have lower initial HS GPA and SAT (\(\mathbf{z}\)), lower baseline college GPA (\(g\)), and need more effort to improve their observable features (\(W\)). Each applicant’s initial features are randomly drawn from one of two distributions, depending on background. Please note that our semi-synthetic dataset is for illustrative purposes only; we are not making any claims about the extent to which SAT, GPA, etc. should be used in college admissions decisions. As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).In this work, we established the possibility of recovering the causal relationship between observable attributes and the outcome of interest in settings where a decision-maker utilizes a series of linear assessment rules to evaluate strategic individuals. Our key observation was that in such settings, assessment rules serve as valid instruments (because they causally impact observable attributes but do not directly cause changes in the outcome). This observation enables us to present a 2SLS method to correct for confounding bias in causal estimates. Armed with accurate estimates of the causal parameters, we additionally provide algorithms for two common principal objectives:agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that our methods outperform standard OLS regression.Our work offers a practical approach for inferring causal relationships while employing reasonably accurate decision-making models. Knowledge of causal relationships in social domains can improve the robustness of ML-based decision-making systems to gaming and manipulation, facilitate auditing these systems for compliance with policy goals such as fairness, and allow planning for better societal outcomes. While our work offers an initial step toward extracting causal knowledge from a series of automated decisions, we rely on several simplifying assumptions, all of which mark essential directions for future work. For instance, we assumed all assessment rules and the underlying causal model are linear. This assumption allowed us to utilize linear IV methods. Extending our work to non-linear assessment rules and IV methods is necessary for the applicability of our method to real-world automated decision-making. Another critical assumption we made was the agent’s full knowledge of the assessment rule and their rational response to it subject to a quadratic effort cost. While these are standard assumptions in economic modeling, they need to be empirically verified in the particular decision-making context at hand before our method’s outputs can be viewed as reliable estimates of causal relationships.For details about our method, mathematical derivations, full experimental results, etc., see our paper here.Name * Email * Website  Save my name, email, and website in this browser for the next time I comment. 
+
+[instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+[ Home ][ Submissions ][ About ]HomeSubmissionsAboutHomeSubmissionsAboutResearchEducationalEstimate the relationship between \(\boldsymbol{\theta}_t\) and \(\mathbf{x}_t\) as \( \widehat{\Omega} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t \mathbf{x}_t^\top\)Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(y_t\) as \( \widehat{\boldsymbol{\lambda}} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t y_t\)Estimate the true causal relationship \(\boldsymbol{\theta}^*\) as \(\widehat{\boldsymbol{\theta}} = \widehat{\Omega}^{-1} \widehat{\boldsymbol{\lambda}}\)
+
+♥196
+ 6596
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Unifying, Game-Theoretic Framework for Imitation Learning
+ The Limitations of Limited Context for Constituency Parsing
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+
+Input your search keywords and press Enter.
+
+
+
+
+
+
+
+Categories:
+
+Research
+Educational
+
+ 
+
+
+
+
+
+
+
+machine learning Research
+Strategic Instrumental Variable Regression: Recovering Causal Relationships from Strategic Responses
+
+
+Authors
+Keegan Harris 
+
+
+Affiliations
+
+
+Published
+                        August 27, 2021                    
+
+DOI
+
+
+
+
+
+
+
+
+In social domains, machine learning algorithms often prompt individuals to strategically modify their observable attributes to receive more favorable predictions. As a result, the distribution the predictive model is trained on may differ from the one it operates on in deployment. While such distribution shifts, in general, hinder accurate predictions, we identify a unique opportunity associated with shifts due to strategic responses. In particular, we show that we can use strategic responses effectively to recover causal relationships between observable features and the outcomes we wish to predict. More specifically, we study a game-theoretic model in which a decision-maker deploys a sequence of models to predict an outcome of interest (e.g., college GPA) for a sequence of strategic agents (e.g., college applicants). In response, strategic agents invest efforts and modify their features for better predictions. 
+In such settings, unobserved confounding variables (e.g., family educational background) can influence both an agent’s observable features (e.g., high school records) and outcomes (e.g., college GPA). Because of this, standard regression methods such as ordinary least squares (OLS) generally produce biased estimators. In order to address this issue, we establish a connection between strategic responses to machine learning models and instrumental variable (IV) regression, a well-studied tool in econometrics, by observing that the sequence of deployed models can be viewed as an instrument that affects agents’ observable features, but does not directly influence their outcomes. Therefore, two-stage least squares (2SLS) regression can be used to recover the causal relationships between observable features and outcomes. Beyond causal recovery, we can use quantities learned during our 2SLS procedure to address two common optimization objectives in strategic regression: agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that they compare favorably to OLS.
+Strategic Regression
+When strategic agents are evaluated by algorithmic assessment tools in high-stakes situations (such as lending, education, or employment), they will modify their observable features in order to achieve a more favorable outcome. This notion is captured succinctly by Goodhart’s Law, a well-known adage by British economist Charles Goodhart, which states that
+“When a measure becomes a target, it ceases to be a good measure.”Charles Goodhart, Problems of Monetary Management: The U.K. Experience (1981)
+With this idea in mind, the quickly-growing field of strategic classification/regression aims to formalize the interaction between a decision-maker, or principal, and a series of decision-subjects (often referred to as agents) as a repeated Stackelberg game (e.g., Hardt et al., 2015, Dong et al., 2018, Milli et al., 2019). At each time \(t\), a new agent from the population interacts with the decision-maker. As a running example, consider a university (principal) which decides whether to accept or reject students (agents) on a rolling basis. The principal moves first, announcing a decision rule \(f(\boldsymbol{\theta}_t, \mathbf{x}_t)\), parameterized by \(\boldsymbol{\theta}_t\), which takes a set of observable features \(\mathbf{x}_t\) as input and produces a prediction \(\hat{y}_t\) as output. Having observed the decision rule \(\boldsymbol{\theta}_t\), agent \(t\) best responds by strategically modifying his observable features in order to receive a higher prediction score, subject to some cost for doing so. In our college admissions example, this would correspond to the university telling each student which qualities they value in an applicant (and to what extent they value them), and each applicant taking some action to improve their chances of being accepted (e.g., studying to improve their high school GPA). Most of the work in the strategic regression literature assumes the principal deploys a linear decision rule, i.e., \(f(\boldsymbol{\theta}_t, \mathbf{x}_t) = \mathbf{x}_t^\top \boldsymbol{\theta}_t\). While this assumption may limit the space of models the principal has at her disposal, it makes the agent’s best-response calculation tractable.
+While the goal of each agent in the strategic regression setting is well-defined, the right objective for the principal is less obvious and is often dependent on the specific setting being considered. For example, the original work on learning under strategic responses (Hardt et al., 2015) views all feature manipulation as undesirable “gaming,” and seeks to design decision rules which minimize predictive risk under agent feature manipulation. More recent work (Kleinberg & Raghavan, 2019) makes a distinction between feature gaming and improvement, i.e., feature manipulation which leads to a positive change in the agent’s true label \(y_t\). Finally, a third line of work (Shavit et al., 2020) aims to recover causal relationships between observable features \(\mathbf{x}_t\) and outcomes \(y_t\), although these methods are only applicable under settings in which all of the agent’s features that causally affect \(y_t\) are observable to the principal. We build upon these lines of work by making the observation that the sequence of decision rules deployed by the principal can be viewed as a valid instrument, which allows us to recover causal relationships between observable features and outcomes without making the assumption that all of an agent’s features are observable. Using knowledge of these causal relationships, we then provide algorithms for agent improvement and predictive risk minimization.
+Instrumental Variable Regression
+Before getting to our method, we quickly review the basics of Instrumental Variable (IV) regression. 
+Imagine a situation in which a researcher is trying to estimate the causal effect that ice cream consumption has on getting sunburned. The researcher asks a group of randomly selected participants about their ice cream consumption levels, and finds that participants who consume ice cream are more likely to get sunburned in the near future. Without taking any additional variables into consideration, the researcher may come to the incorrect conclusion that eating ice cream causes one to become sunburned!
+IV Regression (Angrist and Krueger, 2001) is a family of methods used to estimate causal relationships between independent and dependent variables when there exist omitted variables that affect both directly. In our ice cream example, the weather is an omitted variable that causes confounding by directly affecting both ice cream consumption levels and the likelihood of getting sunburned.
+
+Figure 1. Left: “Ice Cream Man” from Lilo & Stitch. The man’s sunburn and desire for ice cream are most likely both caused by the weather, which is an omitted variable in our example. Right: Graphical model for 2SLS regression. The procedure below details how to estimate the true causal relationship \(\boldsymbol{\theta}^*\) (red line) between \(\mathbf{x}_t\) (e.g., ice cream consumption) and \(y_t\) (e.g., sunburn) in the presence of an omitted variable \(u_t\) (e.g., weather), by using an additional observable variable \(\boldsymbol{\theta}_t\), called the instrumental variable (e.g., how hungry a person is).
+
+
+We focus on two-stage least-squares (2SLS) regression (Angrist and Imbens, 1992), a kind of IV estimator. 2SLS independently estimates the relationship between an instrumental variable \(\boldsymbol{\theta}_t\) and the independent variables \(\mathbf{x}_t\), as well as the relationship between \(\boldsymbol{\theta}_t\) and the dependent variable \(y_t\), via simple least squares regression. Formally, given \(T\) samples, 2SLS estimates the true causal relationship \(\boldsymbol{\theta}^*\) between \(\mathbf{x}_t\) and \(y_t\) through the following procedure:
+Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(\mathbf{x}_t\) as \( \widehat{\Omega} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t \mathbf{x}_t^\top\)Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(y_t\) as \( \widehat{\boldsymbol{\lambda}} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t y_t\)Estimate the true causal relationship \(\boldsymbol{\theta}^*\) as \(\widehat{\boldsymbol{\theta}} = \widehat{\Omega}^{-1} \widehat{\boldsymbol{\lambda}}\)
+Intuitively, 2SLS allows for an unbiased estimate of \(\boldsymbol{\theta}^*\) by using the instrumental variable \(\boldsymbol{\theta}_t\) as a source of “controlled randomness.” By varying \(\boldsymbol{\theta}_t\), we can observe the change in \(\mathbf{x}_t\) and the change in \(y_t\), which allows us to estimate the direct effect \(\mathbf{x}_t\) has on \(y_t\).
+IV Regression in the Strategic Learning Setting
+In this strategic regression setting, we make the observation that the assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are valid instruments. Therefore, we can perform IV regression to estimate the true causal parameters \(\boldsymbol{\theta}^*\). There are two criteria for \(\boldsymbol{\theta}_t\) to be a valid instrument: (1) \(\boldsymbol{\theta}_t\) directly influences the observable features \(\mathbf{x}_t\) and only influences the outcome \(y_t\) through \(\mathbf{x}_t\), and (2) \(\boldsymbol{\theta}_t\) is independent from any unobservable confounding variables. In our setting, this confounding term is represented by the agent’s private type \(u_t\) (see Figure 2 for more information). Criterion (1) is satisfied by the structure of the strategic regression setting. We aim to design a mechanism that satisfies criterion (2) by choosing assessment rule \(\boldsymbol{\theta}_t\) randomly, independent of the private type \(u_t\). As can be seen by the graphical model of our setting, the principal’s assessment rule \(\boldsymbol{\theta}_t\) satisfies these criteria.
+Figure 2. Graphical model for our setting (left) along with the way it corresponds to the admissions running example (right). Grey nodes are observed, white unobserved. Observable features \(\mathbf{x}_t\) (e.g., high school GPA, SAT scores, etc.) depend on both the agent’s private type \(u_t\) (e.g., a student’s background — whether they have family who went to college, their gender, race, ethnicity, socioeconomic status, etc.) via initial features \(\mathbf{z}_t\) (e.g. the SAT score or HS GPA student \(t\) would get without studying) and effort conversion matrix \(W_t\) (e.g., how much studying translates to an increase in SAT score for student \(t\)) and assessment rule \(\boldsymbol{\theta}_t\) via action \(\mathbf{a}_t\) (which could correspond to studying, taking an SAT prep course, etc.). An agent’s outcome \(y_t\) (e.g. college GPA) is determined by their observable features \(\mathbf{x}_t\) (via causal relationship \(\boldsymbol{\theta}^*\)) and type \(u_t\) (via baseline outcome error term \(g_t\), which could be lower for students from underserved groups due to institutional barriers, discrimination, etc.).
+Under mild restrictions on the agent population, if the principal plays a sequence of random assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) with component-wise variance at least \(\sigma_{\theta}^2\), our estimate \(\widehat{\boldsymbol{\theta}}\) approaches the true causal parameters \(\boldsymbol{\theta}^*\) at a rate of \(\mathcal{O}(\sigma_{\theta}^{-2} T^{-1/2})\), with high probability. Note that while we require the principal to play random assessment rules in order to achieve our bound, we make no assumption on the mean values of the distribution \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are drawn from, meaning that the principal can play random perturbations of a “reasonable” assessment rule in order to achieve the desired bound.
+Other Principal Objectives
+In some settings, it may be enough for the principal to discover the true relationship between the observable features \(\mathbf{x}_t\) and outcome \(y_t\). However in other settings, the principal may wish to take a more active role. We explore two additional goals the principal may have, agent outcome maximization and predictive risk minimization, both of which are common goals in the strategic regression literature.
+In the agent outcome maximization setting, the goal of the principal is to maximize the expected outcome \(\mathbb{E}[y_t]\) of an agent from the agent population. In our running college admissions example, this would correspond to deploying an assessment rule with the goal of maximizing expected student college GPA. Note that \(\boldsymbol{\theta}^{AO}\), the assessment rule which maximizes \(\mathbb{E}[y_t]\), need not be equal to the causal parameters \(\boldsymbol{\theta}^*\). Formally, we aim to find \(\boldsymbol{\theta}^{AO}\) in a convex set \(\mathcal{C}\) of feasible assessment rules such that the induced expected agent outcome \(\mathbb{E}[y_t]\) is maximized. We can formulate the problem of recovering \(\boldsymbol{\theta}^{AO}\) as a convex optimization problem with a linear objective function and constraint that \(\boldsymbol{\theta}^{AO}\) lie in \(\mathcal{C}\). While this optimization has an explicit dependence on \(\boldsymbol{\theta}^*\), the principal has all the information required to solve the optimization if she has already ran 2SLS to recover a sufficiently accurate estimate of the causal parameters \(\boldsymbol{\theta}^*\).
+On the other hand, the goal of the principal in the predictive risk minimization setting is to learn the assessment rule that minimizes \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\), the expected squared difference between an agent’s true outcome and the outcome predicted by the principal. Similar to the agent outcome maximization setting, the principal will be able to calculate the gradient of \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\) after having recovered a sufficiently accurate estimate of \(\boldsymbol{\theta}^*\). Due to the dependence of \(\mathbf{x}_t\) and \(y_t\) on the assessment rule deployed by the principal, the predictive risk function will be nonconvex in general, and can have several extrema which are not global minima, even in the case of just one observable feature. Because of this, natural learning dynamics like online gradient descent will generally only converge to local minima of the predictive risk function.
+Experiments
+We empirically evaluate our model on a semi-synthetic dataset based on our running university admissions example, and compare our 2SLS-based method against OLS, which directly regresses observed outcomes \(y\) on observable features \(\mathbf{x}\). We constructed our semi-synthetic dataset by modifying the SATGPA dataset, a publicly available dataset which contains statistics on 1000 college students. We use high school (HS) grades, as measured by grade point average (GPA) and SAT score as observable features, and college GPA as the outcome. Using OLS, we find that the effect of [SAT, HS GPA] on college GPA in this dataset is \(\boldsymbol{\theta}^*= [0.0015, 0.5895]\). We then construct synthetic data that is based on this original data, yet incorporates confounding factors. For simplicity, we let the true effect \(\boldsymbol{\theta}^* = [0, 0.5]\). That is, we assume HS GPA affects college GPA, but SAT score does not. We consider two private types of applicant backgrounds: disadvantaged and advantaged. Disadvantaged applicants have lower initial HS GPA and SAT (\(\mathbf{z}\)), lower baseline college GPA (\(g\)), and need more effort to improve their observable features (\(W\)). Each applicant’s initial features are randomly drawn from one of two distributions, depending on background. Please note that our semi-synthetic dataset is for illustrative purposes only; we are not making any claims about the extent to which SAT, GPA, etc. should be used in college admissions decisions. 
+Figure 3. Left: OLS versus 2SLS estimates for SAT effect on college GPA over 5000 rounds. Right: OLS versus 2SLS estimates for high school GPA effect on college GPA over 5000 rounds. Results are averaged over 10 runs, with the error bars (in lighter colors) representing one standard deviation. The red dashed line is the true causal effect of SAT/HS GPA on college GPA.
+
+
+
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+
+
+
+
+Conclusion and Discussion
+In this work, we established the possibility of recovering the causal relationship between observable attributes and the outcome of interest in settings where a decision-maker utilizes a series of linear assessment rules to evaluate strategic individuals. Our key observation was that in such settings, assessment rules serve as valid instruments (because they causally impact observable attributes but do not directly cause changes in the outcome). This observation enables us to present a 2SLS method to correct for confounding bias in causal estimates. Armed with accurate estimates of the causal parameters, we additionally provide algorithms for two common principal objectives:agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that our methods outperform standard OLS regression.
+Our work offers a practical approach for inferring causal relationships while employing reasonably accurate decision-making models. Knowledge of causal relationships in social domains can improve the robustness of ML-based decision-making systems to gaming and manipulation, facilitate auditing these systems for compliance with policy goals such as fairness, and allow planning for better societal outcomes. While our work offers an initial step toward extracting causal knowledge from a series of automated decisions, we rely on several simplifying assumptions, all of which mark essential directions for future work. For instance, we assumed all assessment rules and the underlying causal model are linear. This assumption allowed us to utilize linear IV methods. Extending our work to non-linear assessment rules and IV methods is necessary for the applicability of our method to real-world automated decision-making. Another critical assumption we made was the agent’s full knowledge of the assessment rule and their rational response to it subject to a quadratic effort cost. While these are standard assumptions in economic modeling, they need to be empirically verified in the particular decision-making context at hand before our method’s outputs can be viewed as reliable estimates of causal relationships.
+For details about our method, mathematical derivations, full experimental results, etc., see our paper here.
+
+
+
+
+
+♥196
+ 6596
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Unifying, Game-Theoretic Framework for Imitation Learning
+
+ The Limitations of Limited Context for Constituency Parsing
+
+You Might Also Like
+
+
+
+Carnegie Mellon University at NeurIPS 2021
+December 6, 2021
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+Inherent Tradeoffs in Learning Fair Representations
+February 28, 2020
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+ 
+
+
+
+
+
+
+
+
+machine learning Research
+Strategic Instrumental Variable Regression: Recovering Causal Relationships from Strategic Responses
+
+
+Authors
+Keegan Harris 
+
+
+Affiliations
+
+
+Published
+                        August 27, 2021                    
+
+DOI
+
+
+
+
+
+
+
+
+In social domains, machine learning algorithms often prompt individuals to strategically modify their observable attributes to receive more favorable predictions. As a result, the distribution the predictive model is trained on may differ from the one it operates on in deployment. While such distribution shifts, in general, hinder accurate predictions, we identify a unique opportunity associated with shifts due to strategic responses. In particular, we show that we can use strategic responses effectively to recover causal relationships between observable features and the outcomes we wish to predict. More specifically, we study a game-theoretic model in which a decision-maker deploys a sequence of models to predict an outcome of interest (e.g., college GPA) for a sequence of strategic agents (e.g., college applicants). In response, strategic agents invest efforts and modify their features for better predictions. 
+In such settings, unobserved confounding variables (e.g., family educational background) can influence both an agent’s observable features (e.g., high school records) and outcomes (e.g., college GPA). Because of this, standard regression methods such as ordinary least squares (OLS) generally produce biased estimators. In order to address this issue, we establish a connection between strategic responses to machine learning models and instrumental variable (IV) regression, a well-studied tool in econometrics, by observing that the sequence of deployed models can be viewed as an instrument that affects agents’ observable features, but does not directly influence their outcomes. Therefore, two-stage least squares (2SLS) regression can be used to recover the causal relationships between observable features and outcomes. Beyond causal recovery, we can use quantities learned during our 2SLS procedure to address two common optimization objectives in strategic regression: agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that they compare favorably to OLS.
+Strategic Regression
+When strategic agents are evaluated by algorithmic assessment tools in high-stakes situations (such as lending, education, or employment), they will modify their observable features in order to achieve a more favorable outcome. This notion is captured succinctly by Goodhart’s Law, a well-known adage by British economist Charles Goodhart, which states that
+“When a measure becomes a target, it ceases to be a good measure.”Charles Goodhart, Problems of Monetary Management: The U.K. Experience (1981)
+With this idea in mind, the quickly-growing field of strategic classification/regression aims to formalize the interaction between a decision-maker, or principal, and a series of decision-subjects (often referred to as agents) as a repeated Stackelberg game (e.g., Hardt et al., 2015, Dong et al., 2018, Milli et al., 2019). At each time \(t\), a new agent from the population interacts with the decision-maker. As a running example, consider a university (principal) which decides whether to accept or reject students (agents) on a rolling basis. The principal moves first, announcing a decision rule \(f(\boldsymbol{\theta}_t, \mathbf{x}_t)\), parameterized by \(\boldsymbol{\theta}_t\), which takes a set of observable features \(\mathbf{x}_t\) as input and produces a prediction \(\hat{y}_t\) as output. Having observed the decision rule \(\boldsymbol{\theta}_t\), agent \(t\) best responds by strategically modifying his observable features in order to receive a higher prediction score, subject to some cost for doing so. In our college admissions example, this would correspond to the university telling each student which qualities they value in an applicant (and to what extent they value them), and each applicant taking some action to improve their chances of being accepted (e.g., studying to improve their high school GPA). Most of the work in the strategic regression literature assumes the principal deploys a linear decision rule, i.e., \(f(\boldsymbol{\theta}_t, \mathbf{x}_t) = \mathbf{x}_t^\top \boldsymbol{\theta}_t\). While this assumption may limit the space of models the principal has at her disposal, it makes the agent’s best-response calculation tractable.
+While the goal of each agent in the strategic regression setting is well-defined, the right objective for the principal is less obvious and is often dependent on the specific setting being considered. For example, the original work on learning under strategic responses (Hardt et al., 2015) views all feature manipulation as undesirable “gaming,” and seeks to design decision rules which minimize predictive risk under agent feature manipulation. More recent work (Kleinberg & Raghavan, 2019) makes a distinction between feature gaming and improvement, i.e., feature manipulation which leads to a positive change in the agent’s true label \(y_t\). Finally, a third line of work (Shavit et al., 2020) aims to recover causal relationships between observable features \(\mathbf{x}_t\) and outcomes \(y_t\), although these methods are only applicable under settings in which all of the agent’s features that causally affect \(y_t\) are observable to the principal. We build upon these lines of work by making the observation that the sequence of decision rules deployed by the principal can be viewed as a valid instrument, which allows us to recover causal relationships between observable features and outcomes without making the assumption that all of an agent’s features are observable. Using knowledge of these causal relationships, we then provide algorithms for agent improvement and predictive risk minimization.
+Instrumental Variable Regression
+Before getting to our method, we quickly review the basics of Instrumental Variable (IV) regression. 
+Imagine a situation in which a researcher is trying to estimate the causal effect that ice cream consumption has on getting sunburned. The researcher asks a group of randomly selected participants about their ice cream consumption levels, and finds that participants who consume ice cream are more likely to get sunburned in the near future. Without taking any additional variables into consideration, the researcher may come to the incorrect conclusion that eating ice cream causes one to become sunburned!
+IV Regression (Angrist and Krueger, 2001) is a family of methods used to estimate causal relationships between independent and dependent variables when there exist omitted variables that affect both directly. In our ice cream example, the weather is an omitted variable that causes confounding by directly affecting both ice cream consumption levels and the likelihood of getting sunburned.
+
+Figure 1. Left: “Ice Cream Man” from Lilo & Stitch. The man’s sunburn and desire for ice cream are most likely both caused by the weather, which is an omitted variable in our example. Right: Graphical model for 2SLS regression. The procedure below details how to estimate the true causal relationship \(\boldsymbol{\theta}^*\) (red line) between \(\mathbf{x}_t\) (e.g., ice cream consumption) and \(y_t\) (e.g., sunburn) in the presence of an omitted variable \(u_t\) (e.g., weather), by using an additional observable variable \(\boldsymbol{\theta}_t\), called the instrumental variable (e.g., how hungry a person is).
+
+
+We focus on two-stage least-squares (2SLS) regression (Angrist and Imbens, 1992), a kind of IV estimator. 2SLS independently estimates the relationship between an instrumental variable \(\boldsymbol{\theta}_t\) and the independent variables \(\mathbf{x}_t\), as well as the relationship between \(\boldsymbol{\theta}_t\) and the dependent variable \(y_t\), via simple least squares regression. Formally, given \(T\) samples, 2SLS estimates the true causal relationship \(\boldsymbol{\theta}^*\) between \(\mathbf{x}_t\) and \(y_t\) through the following procedure:
+Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(\mathbf{x}_t\) as \( \widehat{\Omega} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t \mathbf{x}_t^\top\)Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(y_t\) as \( \widehat{\boldsymbol{\lambda}} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t y_t\)Estimate the true causal relationship \(\boldsymbol{\theta}^*\) as \(\widehat{\boldsymbol{\theta}} = \widehat{\Omega}^{-1} \widehat{\boldsymbol{\lambda}}\)
+Intuitively, 2SLS allows for an unbiased estimate of \(\boldsymbol{\theta}^*\) by using the instrumental variable \(\boldsymbol{\theta}_t\) as a source of “controlled randomness.” By varying \(\boldsymbol{\theta}_t\), we can observe the change in \(\mathbf{x}_t\) and the change in \(y_t\), which allows us to estimate the direct effect \(\mathbf{x}_t\) has on \(y_t\).
+IV Regression in the Strategic Learning Setting
+In this strategic regression setting, we make the observation that the assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are valid instruments. Therefore, we can perform IV regression to estimate the true causal parameters \(\boldsymbol{\theta}^*\). There are two criteria for \(\boldsymbol{\theta}_t\) to be a valid instrument: (1) \(\boldsymbol{\theta}_t\) directly influences the observable features \(\mathbf{x}_t\) and only influences the outcome \(y_t\) through \(\mathbf{x}_t\), and (2) \(\boldsymbol{\theta}_t\) is independent from any unobservable confounding variables. In our setting, this confounding term is represented by the agent’s private type \(u_t\) (see Figure 2 for more information). Criterion (1) is satisfied by the structure of the strategic regression setting. We aim to design a mechanism that satisfies criterion (2) by choosing assessment rule \(\boldsymbol{\theta}_t\) randomly, independent of the private type \(u_t\). As can be seen by the graphical model of our setting, the principal’s assessment rule \(\boldsymbol{\theta}_t\) satisfies these criteria.
+Figure 2. Graphical model for our setting (left) along with the way it corresponds to the admissions running example (right). Grey nodes are observed, white unobserved. Observable features \(\mathbf{x}_t\) (e.g., high school GPA, SAT scores, etc.) depend on both the agent’s private type \(u_t\) (e.g., a student’s background — whether they have family who went to college, their gender, race, ethnicity, socioeconomic status, etc.) via initial features \(\mathbf{z}_t\) (e.g. the SAT score or HS GPA student \(t\) would get without studying) and effort conversion matrix \(W_t\) (e.g., how much studying translates to an increase in SAT score for student \(t\)) and assessment rule \(\boldsymbol{\theta}_t\) via action \(\mathbf{a}_t\) (which could correspond to studying, taking an SAT prep course, etc.). An agent’s outcome \(y_t\) (e.g. college GPA) is determined by their observable features \(\mathbf{x}_t\) (via causal relationship \(\boldsymbol{\theta}^*\)) and type \(u_t\) (via baseline outcome error term \(g_t\), which could be lower for students from underserved groups due to institutional barriers, discrimination, etc.).
+Under mild restrictions on the agent population, if the principal plays a sequence of random assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) with component-wise variance at least \(\sigma_{\theta}^2\), our estimate \(\widehat{\boldsymbol{\theta}}\) approaches the true causal parameters \(\boldsymbol{\theta}^*\) at a rate of \(\mathcal{O}(\sigma_{\theta}^{-2} T^{-1/2})\), with high probability. Note that while we require the principal to play random assessment rules in order to achieve our bound, we make no assumption on the mean values of the distribution \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are drawn from, meaning that the principal can play random perturbations of a “reasonable” assessment rule in order to achieve the desired bound.
+Other Principal Objectives
+In some settings, it may be enough for the principal to discover the true relationship between the observable features \(\mathbf{x}_t\) and outcome \(y_t\). However in other settings, the principal may wish to take a more active role. We explore two additional goals the principal may have, agent outcome maximization and predictive risk minimization, both of which are common goals in the strategic regression literature.
+In the agent outcome maximization setting, the goal of the principal is to maximize the expected outcome \(\mathbb{E}[y_t]\) of an agent from the agent population. In our running college admissions example, this would correspond to deploying an assessment rule with the goal of maximizing expected student college GPA. Note that \(\boldsymbol{\theta}^{AO}\), the assessment rule which maximizes \(\mathbb{E}[y_t]\), need not be equal to the causal parameters \(\boldsymbol{\theta}^*\). Formally, we aim to find \(\boldsymbol{\theta}^{AO}\) in a convex set \(\mathcal{C}\) of feasible assessment rules such that the induced expected agent outcome \(\mathbb{E}[y_t]\) is maximized. We can formulate the problem of recovering \(\boldsymbol{\theta}^{AO}\) as a convex optimization problem with a linear objective function and constraint that \(\boldsymbol{\theta}^{AO}\) lie in \(\mathcal{C}\). While this optimization has an explicit dependence on \(\boldsymbol{\theta}^*\), the principal has all the information required to solve the optimization if she has already ran 2SLS to recover a sufficiently accurate estimate of the causal parameters \(\boldsymbol{\theta}^*\).
+On the other hand, the goal of the principal in the predictive risk minimization setting is to learn the assessment rule that minimizes \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\), the expected squared difference between an agent’s true outcome and the outcome predicted by the principal. Similar to the agent outcome maximization setting, the principal will be able to calculate the gradient of \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\) after having recovered a sufficiently accurate estimate of \(\boldsymbol{\theta}^*\). Due to the dependence of \(\mathbf{x}_t\) and \(y_t\) on the assessment rule deployed by the principal, the predictive risk function will be nonconvex in general, and can have several extrema which are not global minima, even in the case of just one observable feature. Because of this, natural learning dynamics like online gradient descent will generally only converge to local minima of the predictive risk function.
+Experiments
+We empirically evaluate our model on a semi-synthetic dataset based on our running university admissions example, and compare our 2SLS-based method against OLS, which directly regresses observed outcomes \(y\) on observable features \(\mathbf{x}\). We constructed our semi-synthetic dataset by modifying the SATGPA dataset, a publicly available dataset which contains statistics on 1000 college students. We use high school (HS) grades, as measured by grade point average (GPA) and SAT score as observable features, and college GPA as the outcome. Using OLS, we find that the effect of [SAT, HS GPA] on college GPA in this dataset is \(\boldsymbol{\theta}^*= [0.0015, 0.5895]\). We then construct synthetic data that is based on this original data, yet incorporates confounding factors. For simplicity, we let the true effect \(\boldsymbol{\theta}^* = [0, 0.5]\). That is, we assume HS GPA affects college GPA, but SAT score does not. We consider two private types of applicant backgrounds: disadvantaged and advantaged. Disadvantaged applicants have lower initial HS GPA and SAT (\(\mathbf{z}\)), lower baseline college GPA (\(g\)), and need more effort to improve their observable features (\(W\)). Each applicant’s initial features are randomly drawn from one of two distributions, depending on background. Please note that our semi-synthetic dataset is for illustrative purposes only; we are not making any claims about the extent to which SAT, GPA, etc. should be used in college admissions decisions. 
+Figure 3. Left: OLS versus 2SLS estimates for SAT effect on college GPA over 5000 rounds. Right: OLS versus 2SLS estimates for high school GPA effect on college GPA over 5000 rounds. Results are averaged over 10 runs, with the error bars (in lighter colors) representing one standard deviation. The red dashed line is the true causal effect of SAT/HS GPA on college GPA.
+
+
+
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+
+
+
+
+Conclusion and Discussion
+In this work, we established the possibility of recovering the causal relationship between observable attributes and the outcome of interest in settings where a decision-maker utilizes a series of linear assessment rules to evaluate strategic individuals. Our key observation was that in such settings, assessment rules serve as valid instruments (because they causally impact observable attributes but do not directly cause changes in the outcome). This observation enables us to present a 2SLS method to correct for confounding bias in causal estimates. Armed with accurate estimates of the causal parameters, we additionally provide algorithms for two common principal objectives:agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that our methods outperform standard OLS regression.
+Our work offers a practical approach for inferring causal relationships while employing reasonably accurate decision-making models. Knowledge of causal relationships in social domains can improve the robustness of ML-based decision-making systems to gaming and manipulation, facilitate auditing these systems for compliance with policy goals such as fairness, and allow planning for better societal outcomes. While our work offers an initial step toward extracting causal knowledge from a series of automated decisions, we rely on several simplifying assumptions, all of which mark essential directions for future work. For instance, we assumed all assessment rules and the underlying causal model are linear. This assumption allowed us to utilize linear IV methods. Extending our work to non-linear assessment rules and IV methods is necessary for the applicability of our method to real-world automated decision-making. Another critical assumption we made was the agent’s full knowledge of the assessment rule and their rational response to it subject to a quadratic effort cost. While these are standard assumptions in economic modeling, they need to be empirically verified in the particular decision-making context at hand before our method’s outputs can be viewed as reliable estimates of causal relationships.
+For details about our method, mathematical derivations, full experimental results, etc., see our paper here.
+
+
+
+
+
+♥196
+ 6596
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Unifying, Game-Theoretic Framework for Imitation Learning
+
+ The Limitations of Limited Context for Constituency Parsing
+
+You Might Also Like
+
+
+
+Carnegie Mellon University at NeurIPS 2021
+December 6, 2021
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+Inherent Tradeoffs in Learning Fair Representations
+February 28, 2020
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+
+
+
+machine learning Research
+Strategic Instrumental Variable Regression: Recovering Causal Relationships from Strategic Responses
+
+
+Authors
+Keegan Harris 
+
+
+Affiliations
+
+
+Published
+                        August 27, 2021                    
+
+DOI
+
+
+
+
+
+
+
+
+In social domains, machine learning algorithms often prompt individuals to strategically modify their observable attributes to receive more favorable predictions. As a result, the distribution the predictive model is trained on may differ from the one it operates on in deployment. While such distribution shifts, in general, hinder accurate predictions, we identify a unique opportunity associated with shifts due to strategic responses. In particular, we show that we can use strategic responses effectively to recover causal relationships between observable features and the outcomes we wish to predict. More specifically, we study a game-theoretic model in which a decision-maker deploys a sequence of models to predict an outcome of interest (e.g., college GPA) for a sequence of strategic agents (e.g., college applicants). In response, strategic agents invest efforts and modify their features for better predictions. 
+In such settings, unobserved confounding variables (e.g., family educational background) can influence both an agent’s observable features (e.g., high school records) and outcomes (e.g., college GPA). Because of this, standard regression methods such as ordinary least squares (OLS) generally produce biased estimators. In order to address this issue, we establish a connection between strategic responses to machine learning models and instrumental variable (IV) regression, a well-studied tool in econometrics, by observing that the sequence of deployed models can be viewed as an instrument that affects agents’ observable features, but does not directly influence their outcomes. Therefore, two-stage least squares (2SLS) regression can be used to recover the causal relationships between observable features and outcomes. Beyond causal recovery, we can use quantities learned during our 2SLS procedure to address two common optimization objectives in strategic regression: agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that they compare favorably to OLS.
+Strategic Regression
+When strategic agents are evaluated by algorithmic assessment tools in high-stakes situations (such as lending, education, or employment), they will modify their observable features in order to achieve a more favorable outcome. This notion is captured succinctly by Goodhart’s Law, a well-known adage by British economist Charles Goodhart, which states that
+“When a measure becomes a target, it ceases to be a good measure.”Charles Goodhart, Problems of Monetary Management: The U.K. Experience (1981)
+With this idea in mind, the quickly-growing field of strategic classification/regression aims to formalize the interaction between a decision-maker, or principal, and a series of decision-subjects (often referred to as agents) as a repeated Stackelberg game (e.g., Hardt et al., 2015, Dong et al., 2018, Milli et al., 2019). At each time \(t\), a new agent from the population interacts with the decision-maker. As a running example, consider a university (principal) which decides whether to accept or reject students (agents) on a rolling basis. The principal moves first, announcing a decision rule \(f(\boldsymbol{\theta}_t, \mathbf{x}_t)\), parameterized by \(\boldsymbol{\theta}_t\), which takes a set of observable features \(\mathbf{x}_t\) as input and produces a prediction \(\hat{y}_t\) as output. Having observed the decision rule \(\boldsymbol{\theta}_t\), agent \(t\) best responds by strategically modifying his observable features in order to receive a higher prediction score, subject to some cost for doing so. In our college admissions example, this would correspond to the university telling each student which qualities they value in an applicant (and to what extent they value them), and each applicant taking some action to improve their chances of being accepted (e.g., studying to improve their high school GPA). Most of the work in the strategic regression literature assumes the principal deploys a linear decision rule, i.e., \(f(\boldsymbol{\theta}_t, \mathbf{x}_t) = \mathbf{x}_t^\top \boldsymbol{\theta}_t\). While this assumption may limit the space of models the principal has at her disposal, it makes the agent’s best-response calculation tractable.
+While the goal of each agent in the strategic regression setting is well-defined, the right objective for the principal is less obvious and is often dependent on the specific setting being considered. For example, the original work on learning under strategic responses (Hardt et al., 2015) views all feature manipulation as undesirable “gaming,” and seeks to design decision rules which minimize predictive risk under agent feature manipulation. More recent work (Kleinberg & Raghavan, 2019) makes a distinction between feature gaming and improvement, i.e., feature manipulation which leads to a positive change in the agent’s true label \(y_t\). Finally, a third line of work (Shavit et al., 2020) aims to recover causal relationships between observable features \(\mathbf{x}_t\) and outcomes \(y_t\), although these methods are only applicable under settings in which all of the agent’s features that causally affect \(y_t\) are observable to the principal. We build upon these lines of work by making the observation that the sequence of decision rules deployed by the principal can be viewed as a valid instrument, which allows us to recover causal relationships between observable features and outcomes without making the assumption that all of an agent’s features are observable. Using knowledge of these causal relationships, we then provide algorithms for agent improvement and predictive risk minimization.
+Instrumental Variable Regression
+Before getting to our method, we quickly review the basics of Instrumental Variable (IV) regression. 
+Imagine a situation in which a researcher is trying to estimate the causal effect that ice cream consumption has on getting sunburned. The researcher asks a group of randomly selected participants about their ice cream consumption levels, and finds that participants who consume ice cream are more likely to get sunburned in the near future. Without taking any additional variables into consideration, the researcher may come to the incorrect conclusion that eating ice cream causes one to become sunburned!
+IV Regression (Angrist and Krueger, 2001) is a family of methods used to estimate causal relationships between independent and dependent variables when there exist omitted variables that affect both directly. In our ice cream example, the weather is an omitted variable that causes confounding by directly affecting both ice cream consumption levels and the likelihood of getting sunburned.
+
+Figure 1. Left: “Ice Cream Man” from Lilo & Stitch. The man’s sunburn and desire for ice cream are most likely both caused by the weather, which is an omitted variable in our example. Right: Graphical model for 2SLS regression. The procedure below details how to estimate the true causal relationship \(\boldsymbol{\theta}^*\) (red line) between \(\mathbf{x}_t\) (e.g., ice cream consumption) and \(y_t\) (e.g., sunburn) in the presence of an omitted variable \(u_t\) (e.g., weather), by using an additional observable variable \(\boldsymbol{\theta}_t\), called the instrumental variable (e.g., how hungry a person is).
+
+
+We focus on two-stage least-squares (2SLS) regression (Angrist and Imbens, 1992), a kind of IV estimator. 2SLS independently estimates the relationship between an instrumental variable \(\boldsymbol{\theta}_t\) and the independent variables \(\mathbf{x}_t\), as well as the relationship between \(\boldsymbol{\theta}_t\) and the dependent variable \(y_t\), via simple least squares regression. Formally, given \(T\) samples, 2SLS estimates the true causal relationship \(\boldsymbol{\theta}^*\) between \(\mathbf{x}_t\) and \(y_t\) through the following procedure:
+Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(\mathbf{x}_t\) as \( \widehat{\Omega} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t \mathbf{x}_t^\top\)Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(y_t\) as \( \widehat{\boldsymbol{\lambda}} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t y_t\)Estimate the true causal relationship \(\boldsymbol{\theta}^*\) as \(\widehat{\boldsymbol{\theta}} = \widehat{\Omega}^{-1} \widehat{\boldsymbol{\lambda}}\)
+Intuitively, 2SLS allows for an unbiased estimate of \(\boldsymbol{\theta}^*\) by using the instrumental variable \(\boldsymbol{\theta}_t\) as a source of “controlled randomness.” By varying \(\boldsymbol{\theta}_t\), we can observe the change in \(\mathbf{x}_t\) and the change in \(y_t\), which allows us to estimate the direct effect \(\mathbf{x}_t\) has on \(y_t\).
+IV Regression in the Strategic Learning Setting
+In this strategic regression setting, we make the observation that the assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are valid instruments. Therefore, we can perform IV regression to estimate the true causal parameters \(\boldsymbol{\theta}^*\). There are two criteria for \(\boldsymbol{\theta}_t\) to be a valid instrument: (1) \(\boldsymbol{\theta}_t\) directly influences the observable features \(\mathbf{x}_t\) and only influences the outcome \(y_t\) through \(\mathbf{x}_t\), and (2) \(\boldsymbol{\theta}_t\) is independent from any unobservable confounding variables. In our setting, this confounding term is represented by the agent’s private type \(u_t\) (see Figure 2 for more information). Criterion (1) is satisfied by the structure of the strategic regression setting. We aim to design a mechanism that satisfies criterion (2) by choosing assessment rule \(\boldsymbol{\theta}_t\) randomly, independent of the private type \(u_t\). As can be seen by the graphical model of our setting, the principal’s assessment rule \(\boldsymbol{\theta}_t\) satisfies these criteria.
+Figure 2. Graphical model for our setting (left) along with the way it corresponds to the admissions running example (right). Grey nodes are observed, white unobserved. Observable features \(\mathbf{x}_t\) (e.g., high school GPA, SAT scores, etc.) depend on both the agent’s private type \(u_t\) (e.g., a student’s background — whether they have family who went to college, their gender, race, ethnicity, socioeconomic status, etc.) via initial features \(\mathbf{z}_t\) (e.g. the SAT score or HS GPA student \(t\) would get without studying) and effort conversion matrix \(W_t\) (e.g., how much studying translates to an increase in SAT score for student \(t\)) and assessment rule \(\boldsymbol{\theta}_t\) via action \(\mathbf{a}_t\) (which could correspond to studying, taking an SAT prep course, etc.). An agent’s outcome \(y_t\) (e.g. college GPA) is determined by their observable features \(\mathbf{x}_t\) (via causal relationship \(\boldsymbol{\theta}^*\)) and type \(u_t\) (via baseline outcome error term \(g_t\), which could be lower for students from underserved groups due to institutional barriers, discrimination, etc.).
+Under mild restrictions on the agent population, if the principal plays a sequence of random assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) with component-wise variance at least \(\sigma_{\theta}^2\), our estimate \(\widehat{\boldsymbol{\theta}}\) approaches the true causal parameters \(\boldsymbol{\theta}^*\) at a rate of \(\mathcal{O}(\sigma_{\theta}^{-2} T^{-1/2})\), with high probability. Note that while we require the principal to play random assessment rules in order to achieve our bound, we make no assumption on the mean values of the distribution \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are drawn from, meaning that the principal can play random perturbations of a “reasonable” assessment rule in order to achieve the desired bound.
+Other Principal Objectives
+In some settings, it may be enough for the principal to discover the true relationship between the observable features \(\mathbf{x}_t\) and outcome \(y_t\). However in other settings, the principal may wish to take a more active role. We explore two additional goals the principal may have, agent outcome maximization and predictive risk minimization, both of which are common goals in the strategic regression literature.
+In the agent outcome maximization setting, the goal of the principal is to maximize the expected outcome \(\mathbb{E}[y_t]\) of an agent from the agent population. In our running college admissions example, this would correspond to deploying an assessment rule with the goal of maximizing expected student college GPA. Note that \(\boldsymbol{\theta}^{AO}\), the assessment rule which maximizes \(\mathbb{E}[y_t]\), need not be equal to the causal parameters \(\boldsymbol{\theta}^*\). Formally, we aim to find \(\boldsymbol{\theta}^{AO}\) in a convex set \(\mathcal{C}\) of feasible assessment rules such that the induced expected agent outcome \(\mathbb{E}[y_t]\) is maximized. We can formulate the problem of recovering \(\boldsymbol{\theta}^{AO}\) as a convex optimization problem with a linear objective function and constraint that \(\boldsymbol{\theta}^{AO}\) lie in \(\mathcal{C}\). While this optimization has an explicit dependence on \(\boldsymbol{\theta}^*\), the principal has all the information required to solve the optimization if she has already ran 2SLS to recover a sufficiently accurate estimate of the causal parameters \(\boldsymbol{\theta}^*\).
+On the other hand, the goal of the principal in the predictive risk minimization setting is to learn the assessment rule that minimizes \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\), the expected squared difference between an agent’s true outcome and the outcome predicted by the principal. Similar to the agent outcome maximization setting, the principal will be able to calculate the gradient of \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\) after having recovered a sufficiently accurate estimate of \(\boldsymbol{\theta}^*\). Due to the dependence of \(\mathbf{x}_t\) and \(y_t\) on the assessment rule deployed by the principal, the predictive risk function will be nonconvex in general, and can have several extrema which are not global minima, even in the case of just one observable feature. Because of this, natural learning dynamics like online gradient descent will generally only converge to local minima of the predictive risk function.
+Experiments
+We empirically evaluate our model on a semi-synthetic dataset based on our running university admissions example, and compare our 2SLS-based method against OLS, which directly regresses observed outcomes \(y\) on observable features \(\mathbf{x}\). We constructed our semi-synthetic dataset by modifying the SATGPA dataset, a publicly available dataset which contains statistics on 1000 college students. We use high school (HS) grades, as measured by grade point average (GPA) and SAT score as observable features, and college GPA as the outcome. Using OLS, we find that the effect of [SAT, HS GPA] on college GPA in this dataset is \(\boldsymbol{\theta}^*= [0.0015, 0.5895]\). We then construct synthetic data that is based on this original data, yet incorporates confounding factors. For simplicity, we let the true effect \(\boldsymbol{\theta}^* = [0, 0.5]\). That is, we assume HS GPA affects college GPA, but SAT score does not. We consider two private types of applicant backgrounds: disadvantaged and advantaged. Disadvantaged applicants have lower initial HS GPA and SAT (\(\mathbf{z}\)), lower baseline college GPA (\(g\)), and need more effort to improve their observable features (\(W\)). Each applicant’s initial features are randomly drawn from one of two distributions, depending on background. Please note that our semi-synthetic dataset is for illustrative purposes only; we are not making any claims about the extent to which SAT, GPA, etc. should be used in college admissions decisions. 
+Figure 3. Left: OLS versus 2SLS estimates for SAT effect on college GPA over 5000 rounds. Right: OLS versus 2SLS estimates for high school GPA effect on college GPA over 5000 rounds. Results are averaged over 10 runs, with the error bars (in lighter colors) representing one standard deviation. The red dashed line is the true causal effect of SAT/HS GPA on college GPA.
+
+
+
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+
+
+
+
+Conclusion and Discussion
+In this work, we established the possibility of recovering the causal relationship between observable attributes and the outcome of interest in settings where a decision-maker utilizes a series of linear assessment rules to evaluate strategic individuals. Our key observation was that in such settings, assessment rules serve as valid instruments (because they causally impact observable attributes but do not directly cause changes in the outcome). This observation enables us to present a 2SLS method to correct for confounding bias in causal estimates. Armed with accurate estimates of the causal parameters, we additionally provide algorithms for two common principal objectives:agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that our methods outperform standard OLS regression.
+Our work offers a practical approach for inferring causal relationships while employing reasonably accurate decision-making models. Knowledge of causal relationships in social domains can improve the robustness of ML-based decision-making systems to gaming and manipulation, facilitate auditing these systems for compliance with policy goals such as fairness, and allow planning for better societal outcomes. While our work offers an initial step toward extracting causal knowledge from a series of automated decisions, we rely on several simplifying assumptions, all of which mark essential directions for future work. For instance, we assumed all assessment rules and the underlying causal model are linear. This assumption allowed us to utilize linear IV methods. Extending our work to non-linear assessment rules and IV methods is necessary for the applicability of our method to real-world automated decision-making. Another critical assumption we made was the agent’s full knowledge of the assessment rule and their rational response to it subject to a quadratic effort cost. While these are standard assumptions in economic modeling, they need to be empirically verified in the particular decision-making context at hand before our method’s outputs can be viewed as reliable estimates of causal relationships.
+For details about our method, mathematical derivations, full experimental results, etc., see our paper here.
+
+
+
+
+
+♥196
+ 6596
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Unifying, Game-Theoretic Framework for Imitation Learning
+
+ The Limitations of Limited Context for Constituency Parsing
+
+You Might Also Like
+
+
+
+Carnegie Mellon University at NeurIPS 2021
+December 6, 2021
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+Inherent Tradeoffs in Learning Fair Representations
+February 28, 2020
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+
+machine learning Research
+Strategic Instrumental Variable Regression: Recovering Causal Relationships from Strategic Responses
+
+
+Authors
+Keegan Harris 
+
+
+Affiliations
+
+
+Published
+                        August 27, 2021                    
+
+DOI
+
+
+
+
+
+
+
+
+In social domains, machine learning algorithms often prompt individuals to strategically modify their observable attributes to receive more favorable predictions. As a result, the distribution the predictive model is trained on may differ from the one it operates on in deployment. While such distribution shifts, in general, hinder accurate predictions, we identify a unique opportunity associated with shifts due to strategic responses. In particular, we show that we can use strategic responses effectively to recover causal relationships between observable features and the outcomes we wish to predict. More specifically, we study a game-theoretic model in which a decision-maker deploys a sequence of models to predict an outcome of interest (e.g., college GPA) for a sequence of strategic agents (e.g., college applicants). In response, strategic agents invest efforts and modify their features for better predictions. 
+In such settings, unobserved confounding variables (e.g., family educational background) can influence both an agent’s observable features (e.g., high school records) and outcomes (e.g., college GPA). Because of this, standard regression methods such as ordinary least squares (OLS) generally produce biased estimators. In order to address this issue, we establish a connection between strategic responses to machine learning models and instrumental variable (IV) regression, a well-studied tool in econometrics, by observing that the sequence of deployed models can be viewed as an instrument that affects agents’ observable features, but does not directly influence their outcomes. Therefore, two-stage least squares (2SLS) regression can be used to recover the causal relationships between observable features and outcomes. Beyond causal recovery, we can use quantities learned during our 2SLS procedure to address two common optimization objectives in strategic regression: agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that they compare favorably to OLS.
+Strategic Regression
+When strategic agents are evaluated by algorithmic assessment tools in high-stakes situations (such as lending, education, or employment), they will modify their observable features in order to achieve a more favorable outcome. This notion is captured succinctly by Goodhart’s Law, a well-known adage by British economist Charles Goodhart, which states that
+“When a measure becomes a target, it ceases to be a good measure.”Charles Goodhart, Problems of Monetary Management: The U.K. Experience (1981)
+With this idea in mind, the quickly-growing field of strategic classification/regression aims to formalize the interaction between a decision-maker, or principal, and a series of decision-subjects (often referred to as agents) as a repeated Stackelberg game (e.g., Hardt et al., 2015, Dong et al., 2018, Milli et al., 2019). At each time \(t\), a new agent from the population interacts with the decision-maker. As a running example, consider a university (principal) which decides whether to accept or reject students (agents) on a rolling basis. The principal moves first, announcing a decision rule \(f(\boldsymbol{\theta}_t, \mathbf{x}_t)\), parameterized by \(\boldsymbol{\theta}_t\), which takes a set of observable features \(\mathbf{x}_t\) as input and produces a prediction \(\hat{y}_t\) as output. Having observed the decision rule \(\boldsymbol{\theta}_t\), agent \(t\) best responds by strategically modifying his observable features in order to receive a higher prediction score, subject to some cost for doing so. In our college admissions example, this would correspond to the university telling each student which qualities they value in an applicant (and to what extent they value them), and each applicant taking some action to improve their chances of being accepted (e.g., studying to improve their high school GPA). Most of the work in the strategic regression literature assumes the principal deploys a linear decision rule, i.e., \(f(\boldsymbol{\theta}_t, \mathbf{x}_t) = \mathbf{x}_t^\top \boldsymbol{\theta}_t\). While this assumption may limit the space of models the principal has at her disposal, it makes the agent’s best-response calculation tractable.
+While the goal of each agent in the strategic regression setting is well-defined, the right objective for the principal is less obvious and is often dependent on the specific setting being considered. For example, the original work on learning under strategic responses (Hardt et al., 2015) views all feature manipulation as undesirable “gaming,” and seeks to design decision rules which minimize predictive risk under agent feature manipulation. More recent work (Kleinberg & Raghavan, 2019) makes a distinction between feature gaming and improvement, i.e., feature manipulation which leads to a positive change in the agent’s true label \(y_t\). Finally, a third line of work (Shavit et al., 2020) aims to recover causal relationships between observable features \(\mathbf{x}_t\) and outcomes \(y_t\), although these methods are only applicable under settings in which all of the agent’s features that causally affect \(y_t\) are observable to the principal. We build upon these lines of work by making the observation that the sequence of decision rules deployed by the principal can be viewed as a valid instrument, which allows us to recover causal relationships between observable features and outcomes without making the assumption that all of an agent’s features are observable. Using knowledge of these causal relationships, we then provide algorithms for agent improvement and predictive risk minimization.
+Instrumental Variable Regression
+Before getting to our method, we quickly review the basics of Instrumental Variable (IV) regression. 
+Imagine a situation in which a researcher is trying to estimate the causal effect that ice cream consumption has on getting sunburned. The researcher asks a group of randomly selected participants about their ice cream consumption levels, and finds that participants who consume ice cream are more likely to get sunburned in the near future. Without taking any additional variables into consideration, the researcher may come to the incorrect conclusion that eating ice cream causes one to become sunburned!
+IV Regression (Angrist and Krueger, 2001) is a family of methods used to estimate causal relationships between independent and dependent variables when there exist omitted variables that affect both directly. In our ice cream example, the weather is an omitted variable that causes confounding by directly affecting both ice cream consumption levels and the likelihood of getting sunburned.
+
+Figure 1. Left: “Ice Cream Man” from Lilo & Stitch. The man’s sunburn and desire for ice cream are most likely both caused by the weather, which is an omitted variable in our example. Right: Graphical model for 2SLS regression. The procedure below details how to estimate the true causal relationship \(\boldsymbol{\theta}^*\) (red line) between \(\mathbf{x}_t\) (e.g., ice cream consumption) and \(y_t\) (e.g., sunburn) in the presence of an omitted variable \(u_t\) (e.g., weather), by using an additional observable variable \(\boldsymbol{\theta}_t\), called the instrumental variable (e.g., how hungry a person is).
+
+
+We focus on two-stage least-squares (2SLS) regression (Angrist and Imbens, 1992), a kind of IV estimator. 2SLS independently estimates the relationship between an instrumental variable \(\boldsymbol{\theta}_t\) and the independent variables \(\mathbf{x}_t\), as well as the relationship between \(\boldsymbol{\theta}_t\) and the dependent variable \(y_t\), via simple least squares regression. Formally, given \(T\) samples, 2SLS estimates the true causal relationship \(\boldsymbol{\theta}^*\) between \(\mathbf{x}_t\) and \(y_t\) through the following procedure:
+Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(\mathbf{x}_t\) as \( \widehat{\Omega} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t \mathbf{x}_t^\top\)Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(y_t\) as \( \widehat{\boldsymbol{\lambda}} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t y_t\)Estimate the true causal relationship \(\boldsymbol{\theta}^*\) as \(\widehat{\boldsymbol{\theta}} = \widehat{\Omega}^{-1} \widehat{\boldsymbol{\lambda}}\)
+Intuitively, 2SLS allows for an unbiased estimate of \(\boldsymbol{\theta}^*\) by using the instrumental variable \(\boldsymbol{\theta}_t\) as a source of “controlled randomness.” By varying \(\boldsymbol{\theta}_t\), we can observe the change in \(\mathbf{x}_t\) and the change in \(y_t\), which allows us to estimate the direct effect \(\mathbf{x}_t\) has on \(y_t\).
+IV Regression in the Strategic Learning Setting
+In this strategic regression setting, we make the observation that the assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are valid instruments. Therefore, we can perform IV regression to estimate the true causal parameters \(\boldsymbol{\theta}^*\). There are two criteria for \(\boldsymbol{\theta}_t\) to be a valid instrument: (1) \(\boldsymbol{\theta}_t\) directly influences the observable features \(\mathbf{x}_t\) and only influences the outcome \(y_t\) through \(\mathbf{x}_t\), and (2) \(\boldsymbol{\theta}_t\) is independent from any unobservable confounding variables. In our setting, this confounding term is represented by the agent’s private type \(u_t\) (see Figure 2 for more information). Criterion (1) is satisfied by the structure of the strategic regression setting. We aim to design a mechanism that satisfies criterion (2) by choosing assessment rule \(\boldsymbol{\theta}_t\) randomly, independent of the private type \(u_t\). As can be seen by the graphical model of our setting, the principal’s assessment rule \(\boldsymbol{\theta}_t\) satisfies these criteria.
+Figure 2. Graphical model for our setting (left) along with the way it corresponds to the admissions running example (right). Grey nodes are observed, white unobserved. Observable features \(\mathbf{x}_t\) (e.g., high school GPA, SAT scores, etc.) depend on both the agent’s private type \(u_t\) (e.g., a student’s background — whether they have family who went to college, their gender, race, ethnicity, socioeconomic status, etc.) via initial features \(\mathbf{z}_t\) (e.g. the SAT score or HS GPA student \(t\) would get without studying) and effort conversion matrix \(W_t\) (e.g., how much studying translates to an increase in SAT score for student \(t\)) and assessment rule \(\boldsymbol{\theta}_t\) via action \(\mathbf{a}_t\) (which could correspond to studying, taking an SAT prep course, etc.). An agent’s outcome \(y_t\) (e.g. college GPA) is determined by their observable features \(\mathbf{x}_t\) (via causal relationship \(\boldsymbol{\theta}^*\)) and type \(u_t\) (via baseline outcome error term \(g_t\), which could be lower for students from underserved groups due to institutional barriers, discrimination, etc.).
+Under mild restrictions on the agent population, if the principal plays a sequence of random assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) with component-wise variance at least \(\sigma_{\theta}^2\), our estimate \(\widehat{\boldsymbol{\theta}}\) approaches the true causal parameters \(\boldsymbol{\theta}^*\) at a rate of \(\mathcal{O}(\sigma_{\theta}^{-2} T^{-1/2})\), with high probability. Note that while we require the principal to play random assessment rules in order to achieve our bound, we make no assumption on the mean values of the distribution \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are drawn from, meaning that the principal can play random perturbations of a “reasonable” assessment rule in order to achieve the desired bound.
+Other Principal Objectives
+In some settings, it may be enough for the principal to discover the true relationship between the observable features \(\mathbf{x}_t\) and outcome \(y_t\). However in other settings, the principal may wish to take a more active role. We explore two additional goals the principal may have, agent outcome maximization and predictive risk minimization, both of which are common goals in the strategic regression literature.
+In the agent outcome maximization setting, the goal of the principal is to maximize the expected outcome \(\mathbb{E}[y_t]\) of an agent from the agent population. In our running college admissions example, this would correspond to deploying an assessment rule with the goal of maximizing expected student college GPA. Note that \(\boldsymbol{\theta}^{AO}\), the assessment rule which maximizes \(\mathbb{E}[y_t]\), need not be equal to the causal parameters \(\boldsymbol{\theta}^*\). Formally, we aim to find \(\boldsymbol{\theta}^{AO}\) in a convex set \(\mathcal{C}\) of feasible assessment rules such that the induced expected agent outcome \(\mathbb{E}[y_t]\) is maximized. We can formulate the problem of recovering \(\boldsymbol{\theta}^{AO}\) as a convex optimization problem with a linear objective function and constraint that \(\boldsymbol{\theta}^{AO}\) lie in \(\mathcal{C}\). While this optimization has an explicit dependence on \(\boldsymbol{\theta}^*\), the principal has all the information required to solve the optimization if she has already ran 2SLS to recover a sufficiently accurate estimate of the causal parameters \(\boldsymbol{\theta}^*\).
+On the other hand, the goal of the principal in the predictive risk minimization setting is to learn the assessment rule that minimizes \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\), the expected squared difference between an agent’s true outcome and the outcome predicted by the principal. Similar to the agent outcome maximization setting, the principal will be able to calculate the gradient of \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\) after having recovered a sufficiently accurate estimate of \(\boldsymbol{\theta}^*\). Due to the dependence of \(\mathbf{x}_t\) and \(y_t\) on the assessment rule deployed by the principal, the predictive risk function will be nonconvex in general, and can have several extrema which are not global minima, even in the case of just one observable feature. Because of this, natural learning dynamics like online gradient descent will generally only converge to local minima of the predictive risk function.
+Experiments
+We empirically evaluate our model on a semi-synthetic dataset based on our running university admissions example, and compare our 2SLS-based method against OLS, which directly regresses observed outcomes \(y\) on observable features \(\mathbf{x}\). We constructed our semi-synthetic dataset by modifying the SATGPA dataset, a publicly available dataset which contains statistics on 1000 college students. We use high school (HS) grades, as measured by grade point average (GPA) and SAT score as observable features, and college GPA as the outcome. Using OLS, we find that the effect of [SAT, HS GPA] on college GPA in this dataset is \(\boldsymbol{\theta}^*= [0.0015, 0.5895]\). We then construct synthetic data that is based on this original data, yet incorporates confounding factors. For simplicity, we let the true effect \(\boldsymbol{\theta}^* = [0, 0.5]\). That is, we assume HS GPA affects college GPA, but SAT score does not. We consider two private types of applicant backgrounds: disadvantaged and advantaged. Disadvantaged applicants have lower initial HS GPA and SAT (\(\mathbf{z}\)), lower baseline college GPA (\(g\)), and need more effort to improve their observable features (\(W\)). Each applicant’s initial features are randomly drawn from one of two distributions, depending on background. Please note that our semi-synthetic dataset is for illustrative purposes only; we are not making any claims about the extent to which SAT, GPA, etc. should be used in college admissions decisions. 
+Figure 3. Left: OLS versus 2SLS estimates for SAT effect on college GPA over 5000 rounds. Right: OLS versus 2SLS estimates for high school GPA effect on college GPA over 5000 rounds. Results are averaged over 10 runs, with the error bars (in lighter colors) representing one standard deviation. The red dashed line is the true causal effect of SAT/HS GPA on college GPA.
+
+
+
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+
+
+
+
+Conclusion and Discussion
+In this work, we established the possibility of recovering the causal relationship between observable attributes and the outcome of interest in settings where a decision-maker utilizes a series of linear assessment rules to evaluate strategic individuals. Our key observation was that in such settings, assessment rules serve as valid instruments (because they causally impact observable attributes but do not directly cause changes in the outcome). This observation enables us to present a 2SLS method to correct for confounding bias in causal estimates. Armed with accurate estimates of the causal parameters, we additionally provide algorithms for two common principal objectives:agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that our methods outperform standard OLS regression.
+Our work offers a practical approach for inferring causal relationships while employing reasonably accurate decision-making models. Knowledge of causal relationships in social domains can improve the robustness of ML-based decision-making systems to gaming and manipulation, facilitate auditing these systems for compliance with policy goals such as fairness, and allow planning for better societal outcomes. While our work offers an initial step toward extracting causal knowledge from a series of automated decisions, we rely on several simplifying assumptions, all of which mark essential directions for future work. For instance, we assumed all assessment rules and the underlying causal model are linear. This assumption allowed us to utilize linear IV methods. Extending our work to non-linear assessment rules and IV methods is necessary for the applicability of our method to real-world automated decision-making. Another critical assumption we made was the agent’s full knowledge of the assessment rule and their rational response to it subject to a quadratic effort cost. While these are standard assumptions in economic modeling, they need to be empirically verified in the particular decision-making context at hand before our method’s outputs can be viewed as reliable estimates of causal relationships.
+For details about our method, mathematical derivations, full experimental results, etc., see our paper here.
+
+
+
+
+
+♥196
+ 6596
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Unifying, Game-Theoretic Framework for Imitation Learning
+
+ The Limitations of Limited Context for Constituency Parsing
+
+You Might Also Like
+
+
+
+Carnegie Mellon University at NeurIPS 2021
+December 6, 2021
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+Inherent Tradeoffs in Learning Fair Representations
+February 28, 2020
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+machine learning Research
+Strategic Instrumental Variable Regression: Recovering Causal Relationships from Strategic Responses
+
+
+Authors
+Keegan Harris 
+
+
+Affiliations
+
+
+Published
+                        August 27, 2021                    
+
+DOI
+
+
+
+
+
+
+
+
+In social domains, machine learning algorithms often prompt individuals to strategically modify their observable attributes to receive more favorable predictions. As a result, the distribution the predictive model is trained on may differ from the one it operates on in deployment. While such distribution shifts, in general, hinder accurate predictions, we identify a unique opportunity associated with shifts due to strategic responses. In particular, we show that we can use strategic responses effectively to recover causal relationships between observable features and the outcomes we wish to predict. More specifically, we study a game-theoretic model in which a decision-maker deploys a sequence of models to predict an outcome of interest (e.g., college GPA) for a sequence of strategic agents (e.g., college applicants). In response, strategic agents invest efforts and modify their features for better predictions. 
+In such settings, unobserved confounding variables (e.g., family educational background) can influence both an agent’s observable features (e.g., high school records) and outcomes (e.g., college GPA). Because of this, standard regression methods such as ordinary least squares (OLS) generally produce biased estimators. In order to address this issue, we establish a connection between strategic responses to machine learning models and instrumental variable (IV) regression, a well-studied tool in econometrics, by observing that the sequence of deployed models can be viewed as an instrument that affects agents’ observable features, but does not directly influence their outcomes. Therefore, two-stage least squares (2SLS) regression can be used to recover the causal relationships between observable features and outcomes. Beyond causal recovery, we can use quantities learned during our 2SLS procedure to address two common optimization objectives in strategic regression: agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that they compare favorably to OLS.
+Strategic Regression
+When strategic agents are evaluated by algorithmic assessment tools in high-stakes situations (such as lending, education, or employment), they will modify their observable features in order to achieve a more favorable outcome. This notion is captured succinctly by Goodhart’s Law, a well-known adage by British economist Charles Goodhart, which states that
+“When a measure becomes a target, it ceases to be a good measure.”Charles Goodhart, Problems of Monetary Management: The U.K. Experience (1981)
+With this idea in mind, the quickly-growing field of strategic classification/regression aims to formalize the interaction between a decision-maker, or principal, and a series of decision-subjects (often referred to as agents) as a repeated Stackelberg game (e.g., Hardt et al., 2015, Dong et al., 2018, Milli et al., 2019). At each time \(t\), a new agent from the population interacts with the decision-maker. As a running example, consider a university (principal) which decides whether to accept or reject students (agents) on a rolling basis. The principal moves first, announcing a decision rule \(f(\boldsymbol{\theta}_t, \mathbf{x}_t)\), parameterized by \(\boldsymbol{\theta}_t\), which takes a set of observable features \(\mathbf{x}_t\) as input and produces a prediction \(\hat{y}_t\) as output. Having observed the decision rule \(\boldsymbol{\theta}_t\), agent \(t\) best responds by strategically modifying his observable features in order to receive a higher prediction score, subject to some cost for doing so. In our college admissions example, this would correspond to the university telling each student which qualities they value in an applicant (and to what extent they value them), and each applicant taking some action to improve their chances of being accepted (e.g., studying to improve their high school GPA). Most of the work in the strategic regression literature assumes the principal deploys a linear decision rule, i.e., \(f(\boldsymbol{\theta}_t, \mathbf{x}_t) = \mathbf{x}_t^\top \boldsymbol{\theta}_t\). While this assumption may limit the space of models the principal has at her disposal, it makes the agent’s best-response calculation tractable.
+While the goal of each agent in the strategic regression setting is well-defined, the right objective for the principal is less obvious and is often dependent on the specific setting being considered. For example, the original work on learning under strategic responses (Hardt et al., 2015) views all feature manipulation as undesirable “gaming,” and seeks to design decision rules which minimize predictive risk under agent feature manipulation. More recent work (Kleinberg & Raghavan, 2019) makes a distinction between feature gaming and improvement, i.e., feature manipulation which leads to a positive change in the agent’s true label \(y_t\). Finally, a third line of work (Shavit et al., 2020) aims to recover causal relationships between observable features \(\mathbf{x}_t\) and outcomes \(y_t\), although these methods are only applicable under settings in which all of the agent’s features that causally affect \(y_t\) are observable to the principal. We build upon these lines of work by making the observation that the sequence of decision rules deployed by the principal can be viewed as a valid instrument, which allows us to recover causal relationships between observable features and outcomes without making the assumption that all of an agent’s features are observable. Using knowledge of these causal relationships, we then provide algorithms for agent improvement and predictive risk minimization.
+Instrumental Variable Regression
+Before getting to our method, we quickly review the basics of Instrumental Variable (IV) regression. 
+Imagine a situation in which a researcher is trying to estimate the causal effect that ice cream consumption has on getting sunburned. The researcher asks a group of randomly selected participants about their ice cream consumption levels, and finds that participants who consume ice cream are more likely to get sunburned in the near future. Without taking any additional variables into consideration, the researcher may come to the incorrect conclusion that eating ice cream causes one to become sunburned!
+IV Regression (Angrist and Krueger, 2001) is a family of methods used to estimate causal relationships between independent and dependent variables when there exist omitted variables that affect both directly. In our ice cream example, the weather is an omitted variable that causes confounding by directly affecting both ice cream consumption levels and the likelihood of getting sunburned.
+
+Figure 1. Left: “Ice Cream Man” from Lilo & Stitch. The man’s sunburn and desire for ice cream are most likely both caused by the weather, which is an omitted variable in our example. Right: Graphical model for 2SLS regression. The procedure below details how to estimate the true causal relationship \(\boldsymbol{\theta}^*\) (red line) between \(\mathbf{x}_t\) (e.g., ice cream consumption) and \(y_t\) (e.g., sunburn) in the presence of an omitted variable \(u_t\) (e.g., weather), by using an additional observable variable \(\boldsymbol{\theta}_t\), called the instrumental variable (e.g., how hungry a person is).
+
+
+We focus on two-stage least-squares (2SLS) regression (Angrist and Imbens, 1992), a kind of IV estimator. 2SLS independently estimates the relationship between an instrumental variable \(\boldsymbol{\theta}_t\) and the independent variables \(\mathbf{x}_t\), as well as the relationship between \(\boldsymbol{\theta}_t\) and the dependent variable \(y_t\), via simple least squares regression. Formally, given \(T\) samples, 2SLS estimates the true causal relationship \(\boldsymbol{\theta}^*\) between \(\mathbf{x}_t\) and \(y_t\) through the following procedure:
+Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(\mathbf{x}_t\) as \( \widehat{\Omega} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t \mathbf{x}_t^\top\)Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(y_t\) as \( \widehat{\boldsymbol{\lambda}} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t y_t\)Estimate the true causal relationship \(\boldsymbol{\theta}^*\) as \(\widehat{\boldsymbol{\theta}} = \widehat{\Omega}^{-1} \widehat{\boldsymbol{\lambda}}\)
+Intuitively, 2SLS allows for an unbiased estimate of \(\boldsymbol{\theta}^*\) by using the instrumental variable \(\boldsymbol{\theta}_t\) as a source of “controlled randomness.” By varying \(\boldsymbol{\theta}_t\), we can observe the change in \(\mathbf{x}_t\) and the change in \(y_t\), which allows us to estimate the direct effect \(\mathbf{x}_t\) has on \(y_t\).
+IV Regression in the Strategic Learning Setting
+In this strategic regression setting, we make the observation that the assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are valid instruments. Therefore, we can perform IV regression to estimate the true causal parameters \(\boldsymbol{\theta}^*\). There are two criteria for \(\boldsymbol{\theta}_t\) to be a valid instrument: (1) \(\boldsymbol{\theta}_t\) directly influences the observable features \(\mathbf{x}_t\) and only influences the outcome \(y_t\) through \(\mathbf{x}_t\), and (2) \(\boldsymbol{\theta}_t\) is independent from any unobservable confounding variables. In our setting, this confounding term is represented by the agent’s private type \(u_t\) (see Figure 2 for more information). Criterion (1) is satisfied by the structure of the strategic regression setting. We aim to design a mechanism that satisfies criterion (2) by choosing assessment rule \(\boldsymbol{\theta}_t\) randomly, independent of the private type \(u_t\). As can be seen by the graphical model of our setting, the principal’s assessment rule \(\boldsymbol{\theta}_t\) satisfies these criteria.
+Figure 2. Graphical model for our setting (left) along with the way it corresponds to the admissions running example (right). Grey nodes are observed, white unobserved. Observable features \(\mathbf{x}_t\) (e.g., high school GPA, SAT scores, etc.) depend on both the agent’s private type \(u_t\) (e.g., a student’s background — whether they have family who went to college, their gender, race, ethnicity, socioeconomic status, etc.) via initial features \(\mathbf{z}_t\) (e.g. the SAT score or HS GPA student \(t\) would get without studying) and effort conversion matrix \(W_t\) (e.g., how much studying translates to an increase in SAT score for student \(t\)) and assessment rule \(\boldsymbol{\theta}_t\) via action \(\mathbf{a}_t\) (which could correspond to studying, taking an SAT prep course, etc.). An agent’s outcome \(y_t\) (e.g. college GPA) is determined by their observable features \(\mathbf{x}_t\) (via causal relationship \(\boldsymbol{\theta}^*\)) and type \(u_t\) (via baseline outcome error term \(g_t\), which could be lower for students from underserved groups due to institutional barriers, discrimination, etc.).
+Under mild restrictions on the agent population, if the principal plays a sequence of random assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) with component-wise variance at least \(\sigma_{\theta}^2\), our estimate \(\widehat{\boldsymbol{\theta}}\) approaches the true causal parameters \(\boldsymbol{\theta}^*\) at a rate of \(\mathcal{O}(\sigma_{\theta}^{-2} T^{-1/2})\), with high probability. Note that while we require the principal to play random assessment rules in order to achieve our bound, we make no assumption on the mean values of the distribution \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are drawn from, meaning that the principal can play random perturbations of a “reasonable” assessment rule in order to achieve the desired bound.
+Other Principal Objectives
+In some settings, it may be enough for the principal to discover the true relationship between the observable features \(\mathbf{x}_t\) and outcome \(y_t\). However in other settings, the principal may wish to take a more active role. We explore two additional goals the principal may have, agent outcome maximization and predictive risk minimization, both of which are common goals in the strategic regression literature.
+In the agent outcome maximization setting, the goal of the principal is to maximize the expected outcome \(\mathbb{E}[y_t]\) of an agent from the agent population. In our running college admissions example, this would correspond to deploying an assessment rule with the goal of maximizing expected student college GPA. Note that \(\boldsymbol{\theta}^{AO}\), the assessment rule which maximizes \(\mathbb{E}[y_t]\), need not be equal to the causal parameters \(\boldsymbol{\theta}^*\). Formally, we aim to find \(\boldsymbol{\theta}^{AO}\) in a convex set \(\mathcal{C}\) of feasible assessment rules such that the induced expected agent outcome \(\mathbb{E}[y_t]\) is maximized. We can formulate the problem of recovering \(\boldsymbol{\theta}^{AO}\) as a convex optimization problem with a linear objective function and constraint that \(\boldsymbol{\theta}^{AO}\) lie in \(\mathcal{C}\). While this optimization has an explicit dependence on \(\boldsymbol{\theta}^*\), the principal has all the information required to solve the optimization if she has already ran 2SLS to recover a sufficiently accurate estimate of the causal parameters \(\boldsymbol{\theta}^*\).
+On the other hand, the goal of the principal in the predictive risk minimization setting is to learn the assessment rule that minimizes \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\), the expected squared difference between an agent’s true outcome and the outcome predicted by the principal. Similar to the agent outcome maximization setting, the principal will be able to calculate the gradient of \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\) after having recovered a sufficiently accurate estimate of \(\boldsymbol{\theta}^*\). Due to the dependence of \(\mathbf{x}_t\) and \(y_t\) on the assessment rule deployed by the principal, the predictive risk function will be nonconvex in general, and can have several extrema which are not global minima, even in the case of just one observable feature. Because of this, natural learning dynamics like online gradient descent will generally only converge to local minima of the predictive risk function.
+Experiments
+We empirically evaluate our model on a semi-synthetic dataset based on our running university admissions example, and compare our 2SLS-based method against OLS, which directly regresses observed outcomes \(y\) on observable features \(\mathbf{x}\). We constructed our semi-synthetic dataset by modifying the SATGPA dataset, a publicly available dataset which contains statistics on 1000 college students. We use high school (HS) grades, as measured by grade point average (GPA) and SAT score as observable features, and college GPA as the outcome. Using OLS, we find that the effect of [SAT, HS GPA] on college GPA in this dataset is \(\boldsymbol{\theta}^*= [0.0015, 0.5895]\). We then construct synthetic data that is based on this original data, yet incorporates confounding factors. For simplicity, we let the true effect \(\boldsymbol{\theta}^* = [0, 0.5]\). That is, we assume HS GPA affects college GPA, but SAT score does not. We consider two private types of applicant backgrounds: disadvantaged and advantaged. Disadvantaged applicants have lower initial HS GPA and SAT (\(\mathbf{z}\)), lower baseline college GPA (\(g\)), and need more effort to improve their observable features (\(W\)). Each applicant’s initial features are randomly drawn from one of two distributions, depending on background. Please note that our semi-synthetic dataset is for illustrative purposes only; we are not making any claims about the extent to which SAT, GPA, etc. should be used in college admissions decisions. 
+Figure 3. Left: OLS versus 2SLS estimates for SAT effect on college GPA over 5000 rounds. Right: OLS versus 2SLS estimates for high school GPA effect on college GPA over 5000 rounds. Results are averaged over 10 runs, with the error bars (in lighter colors) representing one standard deviation. The red dashed line is the true causal effect of SAT/HS GPA on college GPA.
+
+
+
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+
+
+
+
+Conclusion and Discussion
+In this work, we established the possibility of recovering the causal relationship between observable attributes and the outcome of interest in settings where a decision-maker utilizes a series of linear assessment rules to evaluate strategic individuals. Our key observation was that in such settings, assessment rules serve as valid instruments (because they causally impact observable attributes but do not directly cause changes in the outcome). This observation enables us to present a 2SLS method to correct for confounding bias in causal estimates. Armed with accurate estimates of the causal parameters, we additionally provide algorithms for two common principal objectives:agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that our methods outperform standard OLS regression.
+Our work offers a practical approach for inferring causal relationships while employing reasonably accurate decision-making models. Knowledge of causal relationships in social domains can improve the robustness of ML-based decision-making systems to gaming and manipulation, facilitate auditing these systems for compliance with policy goals such as fairness, and allow planning for better societal outcomes. While our work offers an initial step toward extracting causal knowledge from a series of automated decisions, we rely on several simplifying assumptions, all of which mark essential directions for future work. For instance, we assumed all assessment rules and the underlying causal model are linear. This assumption allowed us to utilize linear IV methods. Extending our work to non-linear assessment rules and IV methods is necessary for the applicability of our method to real-world automated decision-making. Another critical assumption we made was the agent’s full knowledge of the assessment rule and their rational response to it subject to a quadratic effort cost. While these are standard assumptions in economic modeling, they need to be empirically verified in the particular decision-making context at hand before our method’s outputs can be viewed as reliable estimates of causal relationships.
+For details about our method, mathematical derivations, full experimental results, etc., see our paper here.
+
+
+
+
+
+♥196
+ 6596
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Unifying, Game-Theoretic Framework for Imitation Learning
+
+ The Limitations of Limited Context for Constituency Parsing
+
+You Might Also Like
+
+
+
+Carnegie Mellon University at NeurIPS 2021
+December 6, 2021
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+Inherent Tradeoffs in Learning Fair Representations
+February 28, 2020
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+machine learning Research
+Strategic Instrumental Variable Regression: Recovering Causal Relationships from Strategic Responses
+
+
+Authors
+Keegan Harris 
+
+
+Affiliations
+
+
+Published
+                        August 27, 2021                    
+
+DOI
+
+
+
+
+
+
+
+
+In social domains, machine learning algorithms often prompt individuals to strategically modify their observable attributes to receive more favorable predictions. As a result, the distribution the predictive model is trained on may differ from the one it operates on in deployment. While such distribution shifts, in general, hinder accurate predictions, we identify a unique opportunity associated with shifts due to strategic responses. In particular, we show that we can use strategic responses effectively to recover causal relationships between observable features and the outcomes we wish to predict. More specifically, we study a game-theoretic model in which a decision-maker deploys a sequence of models to predict an outcome of interest (e.g., college GPA) for a sequence of strategic agents (e.g., college applicants). In response, strategic agents invest efforts and modify their features for better predictions. 
+In such settings, unobserved confounding variables (e.g., family educational background) can influence both an agent’s observable features (e.g., high school records) and outcomes (e.g., college GPA). Because of this, standard regression methods such as ordinary least squares (OLS) generally produce biased estimators. In order to address this issue, we establish a connection between strategic responses to machine learning models and instrumental variable (IV) regression, a well-studied tool in econometrics, by observing that the sequence of deployed models can be viewed as an instrument that affects agents’ observable features, but does not directly influence their outcomes. Therefore, two-stage least squares (2SLS) regression can be used to recover the causal relationships between observable features and outcomes. Beyond causal recovery, we can use quantities learned during our 2SLS procedure to address two common optimization objectives in strategic regression: agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that they compare favorably to OLS.
+Strategic Regression
+When strategic agents are evaluated by algorithmic assessment tools in high-stakes situations (such as lending, education, or employment), they will modify their observable features in order to achieve a more favorable outcome. This notion is captured succinctly by Goodhart’s Law, a well-known adage by British economist Charles Goodhart, which states that
+“When a measure becomes a target, it ceases to be a good measure.”Charles Goodhart, Problems of Monetary Management: The U.K. Experience (1981)
+With this idea in mind, the quickly-growing field of strategic classification/regression aims to formalize the interaction between a decision-maker, or principal, and a series of decision-subjects (often referred to as agents) as a repeated Stackelberg game (e.g., Hardt et al., 2015, Dong et al., 2018, Milli et al., 2019). At each time \(t\), a new agent from the population interacts with the decision-maker. As a running example, consider a university (principal) which decides whether to accept or reject students (agents) on a rolling basis. The principal moves first, announcing a decision rule \(f(\boldsymbol{\theta}_t, \mathbf{x}_t)\), parameterized by \(\boldsymbol{\theta}_t\), which takes a set of observable features \(\mathbf{x}_t\) as input and produces a prediction \(\hat{y}_t\) as output. Having observed the decision rule \(\boldsymbol{\theta}_t\), agent \(t\) best responds by strategically modifying his observable features in order to receive a higher prediction score, subject to some cost for doing so. In our college admissions example, this would correspond to the university telling each student which qualities they value in an applicant (and to what extent they value them), and each applicant taking some action to improve their chances of being accepted (e.g., studying to improve their high school GPA). Most of the work in the strategic regression literature assumes the principal deploys a linear decision rule, i.e., \(f(\boldsymbol{\theta}_t, \mathbf{x}_t) = \mathbf{x}_t^\top \boldsymbol{\theta}_t\). While this assumption may limit the space of models the principal has at her disposal, it makes the agent’s best-response calculation tractable.
+While the goal of each agent in the strategic regression setting is well-defined, the right objective for the principal is less obvious and is often dependent on the specific setting being considered. For example, the original work on learning under strategic responses (Hardt et al., 2015) views all feature manipulation as undesirable “gaming,” and seeks to design decision rules which minimize predictive risk under agent feature manipulation. More recent work (Kleinberg & Raghavan, 2019) makes a distinction between feature gaming and improvement, i.e., feature manipulation which leads to a positive change in the agent’s true label \(y_t\). Finally, a third line of work (Shavit et al., 2020) aims to recover causal relationships between observable features \(\mathbf{x}_t\) and outcomes \(y_t\), although these methods are only applicable under settings in which all of the agent’s features that causally affect \(y_t\) are observable to the principal. We build upon these lines of work by making the observation that the sequence of decision rules deployed by the principal can be viewed as a valid instrument, which allows us to recover causal relationships between observable features and outcomes without making the assumption that all of an agent’s features are observable. Using knowledge of these causal relationships, we then provide algorithms for agent improvement and predictive risk minimization.
+Instrumental Variable Regression
+Before getting to our method, we quickly review the basics of Instrumental Variable (IV) regression. 
+Imagine a situation in which a researcher is trying to estimate the causal effect that ice cream consumption has on getting sunburned. The researcher asks a group of randomly selected participants about their ice cream consumption levels, and finds that participants who consume ice cream are more likely to get sunburned in the near future. Without taking any additional variables into consideration, the researcher may come to the incorrect conclusion that eating ice cream causes one to become sunburned!
+IV Regression (Angrist and Krueger, 2001) is a family of methods used to estimate causal relationships between independent and dependent variables when there exist omitted variables that affect both directly. In our ice cream example, the weather is an omitted variable that causes confounding by directly affecting both ice cream consumption levels and the likelihood of getting sunburned.
+
+Figure 1. Left: “Ice Cream Man” from Lilo & Stitch. The man’s sunburn and desire for ice cream are most likely both caused by the weather, which is an omitted variable in our example. Right: Graphical model for 2SLS regression. The procedure below details how to estimate the true causal relationship \(\boldsymbol{\theta}^*\) (red line) between \(\mathbf{x}_t\) (e.g., ice cream consumption) and \(y_t\) (e.g., sunburn) in the presence of an omitted variable \(u_t\) (e.g., weather), by using an additional observable variable \(\boldsymbol{\theta}_t\), called the instrumental variable (e.g., how hungry a person is).
+
+
+We focus on two-stage least-squares (2SLS) regression (Angrist and Imbens, 1992), a kind of IV estimator. 2SLS independently estimates the relationship between an instrumental variable \(\boldsymbol{\theta}_t\) and the independent variables \(\mathbf{x}_t\), as well as the relationship between \(\boldsymbol{\theta}_t\) and the dependent variable \(y_t\), via simple least squares regression. Formally, given \(T\) samples, 2SLS estimates the true causal relationship \(\boldsymbol{\theta}^*\) between \(\mathbf{x}_t\) and \(y_t\) through the following procedure:
+Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(\mathbf{x}_t\) as \( \widehat{\Omega} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t \mathbf{x}_t^\top\)Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(y_t\) as \( \widehat{\boldsymbol{\lambda}} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t y_t\)Estimate the true causal relationship \(\boldsymbol{\theta}^*\) as \(\widehat{\boldsymbol{\theta}} = \widehat{\Omega}^{-1} \widehat{\boldsymbol{\lambda}}\)
+Intuitively, 2SLS allows for an unbiased estimate of \(\boldsymbol{\theta}^*\) by using the instrumental variable \(\boldsymbol{\theta}_t\) as a source of “controlled randomness.” By varying \(\boldsymbol{\theta}_t\), we can observe the change in \(\mathbf{x}_t\) and the change in \(y_t\), which allows us to estimate the direct effect \(\mathbf{x}_t\) has on \(y_t\).
+IV Regression in the Strategic Learning Setting
+In this strategic regression setting, we make the observation that the assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are valid instruments. Therefore, we can perform IV regression to estimate the true causal parameters \(\boldsymbol{\theta}^*\). There are two criteria for \(\boldsymbol{\theta}_t\) to be a valid instrument: (1) \(\boldsymbol{\theta}_t\) directly influences the observable features \(\mathbf{x}_t\) and only influences the outcome \(y_t\) through \(\mathbf{x}_t\), and (2) \(\boldsymbol{\theta}_t\) is independent from any unobservable confounding variables. In our setting, this confounding term is represented by the agent’s private type \(u_t\) (see Figure 2 for more information). Criterion (1) is satisfied by the structure of the strategic regression setting. We aim to design a mechanism that satisfies criterion (2) by choosing assessment rule \(\boldsymbol{\theta}_t\) randomly, independent of the private type \(u_t\). As can be seen by the graphical model of our setting, the principal’s assessment rule \(\boldsymbol{\theta}_t\) satisfies these criteria.
+Figure 2. Graphical model for our setting (left) along with the way it corresponds to the admissions running example (right). Grey nodes are observed, white unobserved. Observable features \(\mathbf{x}_t\) (e.g., high school GPA, SAT scores, etc.) depend on both the agent’s private type \(u_t\) (e.g., a student’s background — whether they have family who went to college, their gender, race, ethnicity, socioeconomic status, etc.) via initial features \(\mathbf{z}_t\) (e.g. the SAT score or HS GPA student \(t\) would get without studying) and effort conversion matrix \(W_t\) (e.g., how much studying translates to an increase in SAT score for student \(t\)) and assessment rule \(\boldsymbol{\theta}_t\) via action \(\mathbf{a}_t\) (which could correspond to studying, taking an SAT prep course, etc.). An agent’s outcome \(y_t\) (e.g. college GPA) is determined by their observable features \(\mathbf{x}_t\) (via causal relationship \(\boldsymbol{\theta}^*\)) and type \(u_t\) (via baseline outcome error term \(g_t\), which could be lower for students from underserved groups due to institutional barriers, discrimination, etc.).
+Under mild restrictions on the agent population, if the principal plays a sequence of random assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) with component-wise variance at least \(\sigma_{\theta}^2\), our estimate \(\widehat{\boldsymbol{\theta}}\) approaches the true causal parameters \(\boldsymbol{\theta}^*\) at a rate of \(\mathcal{O}(\sigma_{\theta}^{-2} T^{-1/2})\), with high probability. Note that while we require the principal to play random assessment rules in order to achieve our bound, we make no assumption on the mean values of the distribution \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are drawn from, meaning that the principal can play random perturbations of a “reasonable” assessment rule in order to achieve the desired bound.
+Other Principal Objectives
+In some settings, it may be enough for the principal to discover the true relationship between the observable features \(\mathbf{x}_t\) and outcome \(y_t\). However in other settings, the principal may wish to take a more active role. We explore two additional goals the principal may have, agent outcome maximization and predictive risk minimization, both of which are common goals in the strategic regression literature.
+In the agent outcome maximization setting, the goal of the principal is to maximize the expected outcome \(\mathbb{E}[y_t]\) of an agent from the agent population. In our running college admissions example, this would correspond to deploying an assessment rule with the goal of maximizing expected student college GPA. Note that \(\boldsymbol{\theta}^{AO}\), the assessment rule which maximizes \(\mathbb{E}[y_t]\), need not be equal to the causal parameters \(\boldsymbol{\theta}^*\). Formally, we aim to find \(\boldsymbol{\theta}^{AO}\) in a convex set \(\mathcal{C}\) of feasible assessment rules such that the induced expected agent outcome \(\mathbb{E}[y_t]\) is maximized. We can formulate the problem of recovering \(\boldsymbol{\theta}^{AO}\) as a convex optimization problem with a linear objective function and constraint that \(\boldsymbol{\theta}^{AO}\) lie in \(\mathcal{C}\). While this optimization has an explicit dependence on \(\boldsymbol{\theta}^*\), the principal has all the information required to solve the optimization if she has already ran 2SLS to recover a sufficiently accurate estimate of the causal parameters \(\boldsymbol{\theta}^*\).
+On the other hand, the goal of the principal in the predictive risk minimization setting is to learn the assessment rule that minimizes \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\), the expected squared difference between an agent’s true outcome and the outcome predicted by the principal. Similar to the agent outcome maximization setting, the principal will be able to calculate the gradient of \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\) after having recovered a sufficiently accurate estimate of \(\boldsymbol{\theta}^*\). Due to the dependence of \(\mathbf{x}_t\) and \(y_t\) on the assessment rule deployed by the principal, the predictive risk function will be nonconvex in general, and can have several extrema which are not global minima, even in the case of just one observable feature. Because of this, natural learning dynamics like online gradient descent will generally only converge to local minima of the predictive risk function.
+Experiments
+We empirically evaluate our model on a semi-synthetic dataset based on our running university admissions example, and compare our 2SLS-based method against OLS, which directly regresses observed outcomes \(y\) on observable features \(\mathbf{x}\). We constructed our semi-synthetic dataset by modifying the SATGPA dataset, a publicly available dataset which contains statistics on 1000 college students. We use high school (HS) grades, as measured by grade point average (GPA) and SAT score as observable features, and college GPA as the outcome. Using OLS, we find that the effect of [SAT, HS GPA] on college GPA in this dataset is \(\boldsymbol{\theta}^*= [0.0015, 0.5895]\). We then construct synthetic data that is based on this original data, yet incorporates confounding factors. For simplicity, we let the true effect \(\boldsymbol{\theta}^* = [0, 0.5]\). That is, we assume HS GPA affects college GPA, but SAT score does not. We consider two private types of applicant backgrounds: disadvantaged and advantaged. Disadvantaged applicants have lower initial HS GPA and SAT (\(\mathbf{z}\)), lower baseline college GPA (\(g\)), and need more effort to improve their observable features (\(W\)). Each applicant’s initial features are randomly drawn from one of two distributions, depending on background. Please note that our semi-synthetic dataset is for illustrative purposes only; we are not making any claims about the extent to which SAT, GPA, etc. should be used in college admissions decisions. 
+Figure 3. Left: OLS versus 2SLS estimates for SAT effect on college GPA over 5000 rounds. Right: OLS versus 2SLS estimates for high school GPA effect on college GPA over 5000 rounds. Results are averaged over 10 runs, with the error bars (in lighter colors) representing one standard deviation. The red dashed line is the true causal effect of SAT/HS GPA on college GPA.
+
+
+
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+
+
+
+
+Conclusion and Discussion
+In this work, we established the possibility of recovering the causal relationship between observable attributes and the outcome of interest in settings where a decision-maker utilizes a series of linear assessment rules to evaluate strategic individuals. Our key observation was that in such settings, assessment rules serve as valid instruments (because they causally impact observable attributes but do not directly cause changes in the outcome). This observation enables us to present a 2SLS method to correct for confounding bias in causal estimates. Armed with accurate estimates of the causal parameters, we additionally provide algorithms for two common principal objectives:agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that our methods outperform standard OLS regression.
+Our work offers a practical approach for inferring causal relationships while employing reasonably accurate decision-making models. Knowledge of causal relationships in social domains can improve the robustness of ML-based decision-making systems to gaming and manipulation, facilitate auditing these systems for compliance with policy goals such as fairness, and allow planning for better societal outcomes. While our work offers an initial step toward extracting causal knowledge from a series of automated decisions, we rely on several simplifying assumptions, all of which mark essential directions for future work. For instance, we assumed all assessment rules and the underlying causal model are linear. This assumption allowed us to utilize linear IV methods. Extending our work to non-linear assessment rules and IV methods is necessary for the applicability of our method to real-world automated decision-making. Another critical assumption we made was the agent’s full knowledge of the assessment rule and their rational response to it subject to a quadratic effort cost. While these are standard assumptions in economic modeling, they need to be empirically verified in the particular decision-making context at hand before our method’s outputs can be viewed as reliable estimates of causal relationships.
+For details about our method, mathematical derivations, full experimental results, etc., see our paper here.
+
+
+
+
+
+♥196
+ 6596
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A Unifying, Game-Theoretic Framework for Imitation Learning
+
+ The Limitations of Limited Context for Constituency Parsing
+
+You Might Also Like
+
+
+
+Carnegie Mellon University at NeurIPS 2021
+December 6, 2021
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+Inherent Tradeoffs in Learning Fair Representations
+February 28, 2020
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+machine learning Research
+Strategic Instrumental Variable Regression: Recovering Causal Relationships from Strategic Responses
+
+
+Authors
+Keegan Harris 
+
+
+Affiliations
+
+
+Published
+                        August 27, 2021                    
+
+DOI
+
+
+
+
+Authors
+Keegan Harris 
+
+
+Affiliations
+
+
+Published
+                        August 27, 2021                    
+
+DOI
+
+
+Authors
+Keegan Harris 
+Affiliations
+
+Published
+                        August 27, 2021                    
+DOI
+
+
+
+
+In social domains, machine learning algorithms often prompt individuals to strategically modify their observable attributes to receive more favorable predictions. As a result, the distribution the predictive model is trained on may differ from the one it operates on in deployment. While such distribution shifts, in general, hinder accurate predictions, we identify a unique opportunity associated with shifts due to strategic responses. In particular, we show that we can use strategic responses effectively to recover causal relationships between observable features and the outcomes we wish to predict. More specifically, we study a game-theoretic model in which a decision-maker deploys a sequence of models to predict an outcome of interest (e.g., college GPA) for a sequence of strategic agents (e.g., college applicants). In response, strategic agents invest efforts and modify their features for better predictions. 
+In such settings, unobserved confounding variables (e.g., family educational background) can influence both an agent’s observable features (e.g., high school records) and outcomes (e.g., college GPA). Because of this, standard regression methods such as ordinary least squares (OLS) generally produce biased estimators. In order to address this issue, we establish a connection between strategic responses to machine learning models and instrumental variable (IV) regression, a well-studied tool in econometrics, by observing that the sequence of deployed models can be viewed as an instrument that affects agents’ observable features, but does not directly influence their outcomes. Therefore, two-stage least squares (2SLS) regression can be used to recover the causal relationships between observable features and outcomes. Beyond causal recovery, we can use quantities learned during our 2SLS procedure to address two common optimization objectives in strategic regression: agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that they compare favorably to OLS.
+Strategic Regression
+When strategic agents are evaluated by algorithmic assessment tools in high-stakes situations (such as lending, education, or employment), they will modify their observable features in order to achieve a more favorable outcome. This notion is captured succinctly by Goodhart’s Law, a well-known adage by British economist Charles Goodhart, which states that
+“When a measure becomes a target, it ceases to be a good measure.”Charles Goodhart, Problems of Monetary Management: The U.K. Experience (1981)
+With this idea in mind, the quickly-growing field of strategic classification/regression aims to formalize the interaction between a decision-maker, or principal, and a series of decision-subjects (often referred to as agents) as a repeated Stackelberg game (e.g., Hardt et al., 2015, Dong et al., 2018, Milli et al., 2019). At each time \(t\), a new agent from the population interacts with the decision-maker. As a running example, consider a university (principal) which decides whether to accept or reject students (agents) on a rolling basis. The principal moves first, announcing a decision rule \(f(\boldsymbol{\theta}_t, \mathbf{x}_t)\), parameterized by \(\boldsymbol{\theta}_t\), which takes a set of observable features \(\mathbf{x}_t\) as input and produces a prediction \(\hat{y}_t\) as output. Having observed the decision rule \(\boldsymbol{\theta}_t\), agent \(t\) best responds by strategically modifying his observable features in order to receive a higher prediction score, subject to some cost for doing so. In our college admissions example, this would correspond to the university telling each student which qualities they value in an applicant (and to what extent they value them), and each applicant taking some action to improve their chances of being accepted (e.g., studying to improve their high school GPA). Most of the work in the strategic regression literature assumes the principal deploys a linear decision rule, i.e., \(f(\boldsymbol{\theta}_t, \mathbf{x}_t) = \mathbf{x}_t^\top \boldsymbol{\theta}_t\). While this assumption may limit the space of models the principal has at her disposal, it makes the agent’s best-response calculation tractable.
+While the goal of each agent in the strategic regression setting is well-defined, the right objective for the principal is less obvious and is often dependent on the specific setting being considered. For example, the original work on learning under strategic responses (Hardt et al., 2015) views all feature manipulation as undesirable “gaming,” and seeks to design decision rules which minimize predictive risk under agent feature manipulation. More recent work (Kleinberg & Raghavan, 2019) makes a distinction between feature gaming and improvement, i.e., feature manipulation which leads to a positive change in the agent’s true label \(y_t\). Finally, a third line of work (Shavit et al., 2020) aims to recover causal relationships between observable features \(\mathbf{x}_t\) and outcomes \(y_t\), although these methods are only applicable under settings in which all of the agent’s features that causally affect \(y_t\) are observable to the principal. We build upon these lines of work by making the observation that the sequence of decision rules deployed by the principal can be viewed as a valid instrument, which allows us to recover causal relationships between observable features and outcomes without making the assumption that all of an agent’s features are observable. Using knowledge of these causal relationships, we then provide algorithms for agent improvement and predictive risk minimization.
+Instrumental Variable Regression
+Before getting to our method, we quickly review the basics of Instrumental Variable (IV) regression. 
+Imagine a situation in which a researcher is trying to estimate the causal effect that ice cream consumption has on getting sunburned. The researcher asks a group of randomly selected participants about their ice cream consumption levels, and finds that participants who consume ice cream are more likely to get sunburned in the near future. Without taking any additional variables into consideration, the researcher may come to the incorrect conclusion that eating ice cream causes one to become sunburned!
+IV Regression (Angrist and Krueger, 2001) is a family of methods used to estimate causal relationships between independent and dependent variables when there exist omitted variables that affect both directly. In our ice cream example, the weather is an omitted variable that causes confounding by directly affecting both ice cream consumption levels and the likelihood of getting sunburned.
+
+Figure 1. Left: “Ice Cream Man” from Lilo & Stitch. The man’s sunburn and desire for ice cream are most likely both caused by the weather, which is an omitted variable in our example. Right: Graphical model for 2SLS regression. The procedure below details how to estimate the true causal relationship \(\boldsymbol{\theta}^*\) (red line) between \(\mathbf{x}_t\) (e.g., ice cream consumption) and \(y_t\) (e.g., sunburn) in the presence of an omitted variable \(u_t\) (e.g., weather), by using an additional observable variable \(\boldsymbol{\theta}_t\), called the instrumental variable (e.g., how hungry a person is).
+
+
+We focus on two-stage least-squares (2SLS) regression (Angrist and Imbens, 1992), a kind of IV estimator. 2SLS independently estimates the relationship between an instrumental variable \(\boldsymbol{\theta}_t\) and the independent variables \(\mathbf{x}_t\), as well as the relationship between \(\boldsymbol{\theta}_t\) and the dependent variable \(y_t\), via simple least squares regression. Formally, given \(T\) samples, 2SLS estimates the true causal relationship \(\boldsymbol{\theta}^*\) between \(\mathbf{x}_t\) and \(y_t\) through the following procedure:
+Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(\mathbf{x}_t\) as \( \widehat{\Omega} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t \mathbf{x}_t^\top\)Estimate the relationship between \(\boldsymbol{\theta}_t\) and \(y_t\) as \( \widehat{\boldsymbol{\lambda}} = \left( \sum_{t=1}^T \boldsymbol{\theta}_t \boldsymbol{\theta}_t^\top \right)^{-1} \sum_{t=1}^T \boldsymbol{\theta}_t y_t\)Estimate the true causal relationship \(\boldsymbol{\theta}^*\) as \(\widehat{\boldsymbol{\theta}} = \widehat{\Omega}^{-1} \widehat{\boldsymbol{\lambda}}\)
+Intuitively, 2SLS allows for an unbiased estimate of \(\boldsymbol{\theta}^*\) by using the instrumental variable \(\boldsymbol{\theta}_t\) as a source of “controlled randomness.” By varying \(\boldsymbol{\theta}_t\), we can observe the change in \(\mathbf{x}_t\) and the change in \(y_t\), which allows us to estimate the direct effect \(\mathbf{x}_t\) has on \(y_t\).
+IV Regression in the Strategic Learning Setting
+In this strategic regression setting, we make the observation that the assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are valid instruments. Therefore, we can perform IV regression to estimate the true causal parameters \(\boldsymbol{\theta}^*\). There are two criteria for \(\boldsymbol{\theta}_t\) to be a valid instrument: (1) \(\boldsymbol{\theta}_t\) directly influences the observable features \(\mathbf{x}_t\) and only influences the outcome \(y_t\) through \(\mathbf{x}_t\), and (2) \(\boldsymbol{\theta}_t\) is independent from any unobservable confounding variables. In our setting, this confounding term is represented by the agent’s private type \(u_t\) (see Figure 2 for more information). Criterion (1) is satisfied by the structure of the strategic regression setting. We aim to design a mechanism that satisfies criterion (2) by choosing assessment rule \(\boldsymbol{\theta}_t\) randomly, independent of the private type \(u_t\). As can be seen by the graphical model of our setting, the principal’s assessment rule \(\boldsymbol{\theta}_t\) satisfies these criteria.
+Figure 2. Graphical model for our setting (left) along with the way it corresponds to the admissions running example (right). Grey nodes are observed, white unobserved. Observable features \(\mathbf{x}_t\) (e.g., high school GPA, SAT scores, etc.) depend on both the agent’s private type \(u_t\) (e.g., a student’s background — whether they have family who went to college, their gender, race, ethnicity, socioeconomic status, etc.) via initial features \(\mathbf{z}_t\) (e.g. the SAT score or HS GPA student \(t\) would get without studying) and effort conversion matrix \(W_t\) (e.g., how much studying translates to an increase in SAT score for student \(t\)) and assessment rule \(\boldsymbol{\theta}_t\) via action \(\mathbf{a}_t\) (which could correspond to studying, taking an SAT prep course, etc.). An agent’s outcome \(y_t\) (e.g. college GPA) is determined by their observable features \(\mathbf{x}_t\) (via causal relationship \(\boldsymbol{\theta}^*\)) and type \(u_t\) (via baseline outcome error term \(g_t\), which could be lower for students from underserved groups due to institutional barriers, discrimination, etc.).
+Under mild restrictions on the agent population, if the principal plays a sequence of random assessment rules \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) with component-wise variance at least \(\sigma_{\theta}^2\), our estimate \(\widehat{\boldsymbol{\theta}}\) approaches the true causal parameters \(\boldsymbol{\theta}^*\) at a rate of \(\mathcal{O}(\sigma_{\theta}^{-2} T^{-1/2})\), with high probability. Note that while we require the principal to play random assessment rules in order to achieve our bound, we make no assumption on the mean values of the distribution \(\{\boldsymbol{\theta_t}\}_{t=1}^T\) are drawn from, meaning that the principal can play random perturbations of a “reasonable” assessment rule in order to achieve the desired bound.
+Other Principal Objectives
+In some settings, it may be enough for the principal to discover the true relationship between the observable features \(\mathbf{x}_t\) and outcome \(y_t\). However in other settings, the principal may wish to take a more active role. We explore two additional goals the principal may have, agent outcome maximization and predictive risk minimization, both of which are common goals in the strategic regression literature.
+In the agent outcome maximization setting, the goal of the principal is to maximize the expected outcome \(\mathbb{E}[y_t]\) of an agent from the agent population. In our running college admissions example, this would correspond to deploying an assessment rule with the goal of maximizing expected student college GPA. Note that \(\boldsymbol{\theta}^{AO}\), the assessment rule which maximizes \(\mathbb{E}[y_t]\), need not be equal to the causal parameters \(\boldsymbol{\theta}^*\). Formally, we aim to find \(\boldsymbol{\theta}^{AO}\) in a convex set \(\mathcal{C}\) of feasible assessment rules such that the induced expected agent outcome \(\mathbb{E}[y_t]\) is maximized. We can formulate the problem of recovering \(\boldsymbol{\theta}^{AO}\) as a convex optimization problem with a linear objective function and constraint that \(\boldsymbol{\theta}^{AO}\) lie in \(\mathcal{C}\). While this optimization has an explicit dependence on \(\boldsymbol{\theta}^*\), the principal has all the information required to solve the optimization if she has already ran 2SLS to recover a sufficiently accurate estimate of the causal parameters \(\boldsymbol{\theta}^*\).
+On the other hand, the goal of the principal in the predictive risk minimization setting is to learn the assessment rule that minimizes \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\), the expected squared difference between an agent’s true outcome and the outcome predicted by the principal. Similar to the agent outcome maximization setting, the principal will be able to calculate the gradient of \(\mathbb{E}[(y_t – \widehat{y}_t)^2]\) after having recovered a sufficiently accurate estimate of \(\boldsymbol{\theta}^*\). Due to the dependence of \(\mathbf{x}_t\) and \(y_t\) on the assessment rule deployed by the principal, the predictive risk function will be nonconvex in general, and can have several extrema which are not global minima, even in the case of just one observable feature. Because of this, natural learning dynamics like online gradient descent will generally only converge to local minima of the predictive risk function.
+Experiments
+We empirically evaluate our model on a semi-synthetic dataset based on our running university admissions example, and compare our 2SLS-based method against OLS, which directly regresses observed outcomes \(y\) on observable features \(\mathbf{x}\). We constructed our semi-synthetic dataset by modifying the SATGPA dataset, a publicly available dataset which contains statistics on 1000 college students. We use high school (HS) grades, as measured by grade point average (GPA) and SAT score as observable features, and college GPA as the outcome. Using OLS, we find that the effect of [SAT, HS GPA] on college GPA in this dataset is \(\boldsymbol{\theta}^*= [0.0015, 0.5895]\). We then construct synthetic data that is based on this original data, yet incorporates confounding factors. For simplicity, we let the true effect \(\boldsymbol{\theta}^* = [0, 0.5]\). That is, we assume HS GPA affects college GPA, but SAT score does not. We consider two private types of applicant backgrounds: disadvantaged and advantaged. Disadvantaged applicants have lower initial HS GPA and SAT (\(\mathbf{z}\)), lower baseline college GPA (\(g\)), and need more effort to improve their observable features (\(W\)). Each applicant’s initial features are randomly drawn from one of two distributions, depending on background. Please note that our semi-synthetic dataset is for illustrative purposes only; we are not making any claims about the extent to which SAT, GPA, etc. should be used in college admissions decisions. 
+Figure 3. Left: OLS versus 2SLS estimates for SAT effect on college GPA over 5000 rounds. Right: OLS versus 2SLS estimates for high school GPA effect on college GPA over 5000 rounds. Results are averaged over 10 runs, with the error bars (in lighter colors) representing one standard deviation. The red dashed line is the true causal effect of SAT/HS GPA on college GPA.
+
+
+
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+
+
+
+
+Conclusion and Discussion
+In this work, we established the possibility of recovering the causal relationship between observable attributes and the outcome of interest in settings where a decision-maker utilizes a series of linear assessment rules to evaluate strategic individuals. Our key observation was that in such settings, assessment rules serve as valid instruments (because they causally impact observable attributes but do not directly cause changes in the outcome). This observation enables us to present a 2SLS method to correct for confounding bias in causal estimates. Armed with accurate estimates of the causal parameters, we additionally provide algorithms for two common principal objectives:agent outcome maximization and predictive risk minimization. Finally, we empirically evaluate our methods on a semi-synthetic college admissions dataset and find that our methods outperform standard OLS regression.
+Our work offers a practical approach for inferring causal relationships while employing reasonably accurate decision-making models. Knowledge of causal relationships in social domains can improve the robustness of ML-based decision-making systems to gaming and manipulation, facilitate auditing these systems for compliance with policy goals such as fairness, and allow planning for better societal outcomes. While our work offers an initial step toward extracting causal knowledge from a series of automated decisions, we rely on several simplifying assumptions, all of which mark essential directions for future work. For instance, we assumed all assessment rules and the underlying causal model are linear. This assumption allowed us to utilize linear IV methods. Extending our work to non-linear assessment rules and IV methods is necessary for the applicability of our method to real-world automated decision-making. Another critical assumption we made was the agent’s full knowledge of the assessment rule and their rational response to it subject to a quadratic effort cost. While these are standard assumptions in economic modeling, they need to be empirically verified in the particular decision-making context at hand before our method’s outputs can be viewed as reliable estimates of causal relationships.
+For details about our method, mathematical derivations, full experimental results, etc., see our paper here.
+
+Figure 1. Left: “Ice Cream Man” from Lilo & Stitch. The man’s sunburn and desire for ice cream are most likely both caused by the weather, which is an omitted variable in our example. Right: Graphical model for 2SLS regression. The procedure below details how to estimate the true causal relationship \(\boldsymbol{\theta}^*\) (red line) between \(\mathbf{x}_t\) (e.g., ice cream consumption) and \(y_t\) (e.g., sunburn) in the presence of an omitted variable \(u_t\) (e.g., weather), by using an additional observable variable \(\boldsymbol{\theta}_t\), called the instrumental variable (e.g., how hungry a person is).
+
+
+Figure 1. Left: “Ice Cream Man” from Lilo & Stitch. The man’s sunburn and desire for ice cream are most likely both caused by the weather, which is an omitted variable in our example. Right: Graphical model for 2SLS regression. The procedure below details how to estimate the true causal relationship \(\boldsymbol{\theta}^*\) (red line) between \(\mathbf{x}_t\) (e.g., ice cream consumption) and \(y_t\) (e.g., sunburn) in the presence of an omitted variable \(u_t\) (e.g., weather), by using an additional observable variable \(\boldsymbol{\theta}_t\), called the instrumental variable (e.g., how hungry a person is).
+
+
+
+
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+
+
+
+
+
+
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+
+
+
+
+
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+
+
+
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+
+As can be seen by the above figures, our 2SLS method converges to the true effect parameters, whereas OLS has a constant bias. Notably, OLS mistakenly predicts that, on average, a 100 point increase in SAT score leads to about a 0.05 point increase in college GPA, even though the two are not causally related in our synthetic dataset. Moreover, we note that the estimation error of 2SLS empirically decreases at the predicted rate of \(\mathcal{O} \left(\frac{1}{\sqrt{T}} \right)\).
+
+Figure 4. OLS effect estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{OLS}} – \boldsymbol{\theta}^* \|_2 \) (in orange) and 2SLS estimate error \( \|\widehat{\boldsymbol{\theta}}_{\text{2SLS}} – \boldsymbol{\theta}^* \|_2 \) (in blue) over 5000 rounds. Results are averaged over 10 runs. Error bars (in lighter colors) represent one standard deviation.
+
+♥196
+ 6596
+You Might Also Like
+
+
+Carnegie Mellon University at NeurIPS 2021
+December 6, 2021
+
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+
+Inherent Tradeoffs in Learning Fair Representations
+February 28, 2020
+
+
+
+Carnegie Mellon University at NeurIPS 2021
+December 6, 2021
+
+
+auton-survival: An Open-Source Package for Regression, Counterfactual Estimation, Evaluation and Phenotyping Censored Time-to-Event Data
+August 5, 2022
+
+
+Inherent Tradeoffs in Learning Fair Representations
+February 28, 2020
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+No Comments
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+ 
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+  [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+[instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+

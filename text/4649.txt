@@ -1,0 +1,1385 @@
+Active Neural SLAM is a modular navigation system that learns to explore unseen indoor environments.Advances in machine learning, computer vision and robotics have opened up avenues of building intelligent robots which can navigate in the physical world and perform complex tasks in our homes and offices. Exploration is a key challenge in building intelligent navigation agents. When an autonomous agent is dropped in an unseen environment, it needs to explore as much of the environment as fast as possible.Exploring efficiently in a large environment requires the agent to know 3 things:How do we go about training autonomous exploration agents? One popular approach is using end-to-end deep Reinforcement Learning (RL). However, learning about mapping, pose estimation and planning implicitly in an end-to-end fashion is expensive and sample inefficient. This makes prior methods based on end-to-end RL ineffective at exploration in large environments. In order to overcome these limitations, we present a modular system called Active Neural SLAM. It builds on ideas from Simultaneous Localization and Mapping literature in classical robotics and leverages learning for better performance and robustness. It uses structured spatial representations, hierarchical policies and analytical planners for learning to explore effectively in large scenes.Active Neural SLAM (ANS) model consists of three components:We use the Habitat simulator with the Gibson and Matterport3D (MP3D) datasets for our experiments. In our exploration task setup, the objective to maximize the coverage in a fixed time budget of 1000 steps. Coverage is the total area in the map known to be traversable. We use two evaluation metrics, the absolute coverage area in \(m^2\) (Cov) and the percentage of area explored in the scene (% Cov).We use 4 baselines based on end-to-end RL. All models are trained on Gibson training scenes and tested on (1) Gibson val set, and (2) MP3D test set (domain generalization). ANS outperforms baselines by a large margin on both test sets in terms of final coverage (see table above), and in terms of exploration efficiency (see plot below).In the PointGoal task, the objective is to navigate to a goal location whose relative coordinates are given as input. The Active Neural SLAM model can be directly transferred to the PointGoal task without any additional training by just changing the Global policy to always output the PointGoal coordinates as the long-term goal. The ANS model trained for Exploration, when transferred to the PointGoal task can outperform all the baselines trained for the PointGoal Task by a large margin. It  was the winner of the CVPR 2019 Habitat PointGoal Navigation Challenge.Our goal is to get these models to work not just in simulation but in the real-world. It is difficult to transfer navigation models to the real-world due visual and physical domain gap. While simulation environments based on real-world reconstructions close the visual domain gap,  the perfect agent motion and pose sensor in the simulation were unrealistic. In order to bridge this physical domain gap, we collect motion and sensor data in the real-world to create realistic noise models. We then train our exploration policy with noisy motion and pose sensors in the simulation using these noise models. Furthermore, due to the modularity, the pose estimation and global policy work directly on the map space, which is domain invariant. This allowed us to successfully transfer the trained Active Neural SLAM policy on the Locobot hardware platform using the PyRobot API. We presented a modular navigation system which leverages the strengths of both classical and learning-based methods. The use of learning provides flexibility with respect to input modalities (in the SLAM module), leverages structural regularities of the world (in global policies), and provides robustness to errors in state estimation (in local policies). It leads to significantly higher performance and up to 75 times better sample efficiency as compared to end-to-end reinforcement learning. Domain invariance of pose estimation & global policy, and realistic motion & sensor noise models allowed us to successfully transfer the model to the real-world. The Active Neural SLAM model can be further improved by incorporating explicit semantics and adding relocalization capabilities.Incorporating Semantics: The current model only builds an obstacle map, without any explicit semantics. Incorporating semantics in the map and learning task-specific exploration are some challenges to tackle tasks such as Image Goal or Object Goal Navigation.Relocalization: The current model can be coupled with prior relocalization techniques to add the ability to relocalize in a previously constructed map for more efficient navigation in known environments. Relocalization can also help in better pose estimation by mitigating pose drift.Check out the links to the paper, complete codebase with pre-trained models, talk, slides and project webpage below.This blog post was based on the following paper :Devendra Singh Chaplot, Dhiraj Gandhi, Saurabh Gupta, Abhinav Gupta, and Ruslan Salakhutdinov. Learning To Explore Using Active Neural SLAM. In International Conference on Learning Representations (ICLR), 2020.Name * Email * Website  Save my name, email, and website in this browser for the next time I comment. 
+
+[instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+[ Home ][ Submissions ][ About ]HomeSubmissionsAboutHomeSubmissionsAboutResearchEducationalwhere it has been before (i.e. Mapping)where it is now (i.e. Pose Estimation)where it needs to go (i.e. Planning)Neural SLAM Module predicts the map of the environment and the agent pose based on the current observation and previous prediction:It uses convolutional operations to encode the visual observation followed by deconvolution operations to decode the map.It learns a structured map and pose representations.It is trained with supervised learning with binary cross-entropy loss for map prediction and mean-squared loss for pose prediction.It uses convolutional operations to encode the visual observation followed by deconvolution operations to decode the map.It learns a structured map and pose representations.It is trained with supervised learning with binary cross-entropy loss for map prediction and mean-squared loss for pose prediction.Global Policy uses the predicted map and agent pose to produce a long-term goal which is converted to a short-term goal using analytical path-planning (like Dijkstra or A*) on the current map.It uses a CNN to produce a long-term goal.It operates at a course time-scale, once every 25 steps.It is trained using reinforcement learning with the increase in the explored area as the reward.It uses a CNN to produce a long-term goal.It operates at a course time-scale, once every 25 steps.It is trained using reinforcement learning with the increase in the explored area as the reward.Local Policy outputs navigational actions based on the current observation to reach the short-term goal.It uses a CNN + GRU.It operates at a fine time-scale, predicts a low-level navigation action every step, i.e., move-forward, turn-left or turn-right.It is trained using imitation learning with binary cross-entropy loss.It uses a CNN + GRU.It operates at a fine time-scale, predicts a low-level navigation action every step, i.e., move-forward, turn-left or turn-right.It is trained using imitation learning with binary cross-entropy loss.Inductive bias using Neural SLAM: Instead of letting the model figure out what is useful in the RGB observation for exploration, we tell it explicitly what to predict (i.e. map and pose). This leads to better generalization and sample efficiency.Reducing exploration search-space: The Global Policy operates at a course time-scale, picking a long-term goal every 25 steps. This reduces the time horizon for exploration, what needed 100 low-level navigation actions to be explored, can now be explored in 4 high-level actions.Path-Planning comes for free: End-to-end RL needs to learn path-planning implicitly, which is super data-intensive to learn. The Active Neural SLAM model does not need to learn planning. Because we use an explicit map representation, we can simply use classical planning algorithms.
+
+♥268
+ 14786
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+ CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+Machine Learning Blog | ML@CMU | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+
+
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+ 
+
+
+
+
+Statistics:
+91 publications.
+14 categories.
+65 tags.
+
+
+[ Home ]
+[ Submissions ]
+[ About ]
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+
+
+
+
+
+
+Home
+Submissions
+About
+ 
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+Home
+Submissions
+About
+
+
+
+
+
+
+
+
+Input your search keywords and press Enter.
+
+
+
+
+
+
+
+Categories:
+
+Research
+Educational
+
+ 
+
+
+
+
+
+
+
+deep learning machine learning reinforcement learning Research
+Learning to Explore using Active Neural SLAM
+
+
+Authors
+Devendra Singh Chaplot 
+
+
+Affiliations
+
+
+Published
+                        June 19, 2020                    
+
+DOI
+
+
+
+
+
+
+
+
+Active Neural SLAM is a modular navigation system that learns to explore unseen indoor environments.
+
+Advances in machine learning, computer vision and robotics have opened up avenues of building intelligent robots which can navigate in the physical world and perform complex tasks in our homes and offices. Exploration is a key challenge in building intelligent navigation agents. When an autonomous agent is dropped in an unseen environment, it needs to explore as much of the environment as fast as possible.
+Efficient exploration in unknown environments
+Exploring efficiently in a large environment requires the agent to know 3 things:
+where it has been before (i.e. Mapping)where it is now (i.e. Pose Estimation)where it needs to go (i.e. Planning)
+How do we go about training autonomous exploration agents? One popular approach is using end-to-end deep Reinforcement Learning (RL). However, learning about mapping, pose estimation and planning implicitly in an end-to-end fashion is expensive and sample inefficient. This makes prior methods based on end-to-end RL ineffective at exploration in large environments. 
+In order to overcome these limitations, we present a modular system called Active Neural SLAM. It builds on ideas from Simultaneous Localization and Mapping literature in classical robotics and leverages learning for better performance and robustness. It uses structured spatial representations, hierarchical policies and analytical planners for learning to explore effectively in large scenes.
+
+Active Neural SLAM
+Overview of Active Neural SLAM model.
+Active Neural SLAM (ANS) model consists of three components:
+Neural SLAM Module predicts the map of the environment and the agent pose based on the current observation and previous prediction:It uses convolutional operations to encode the visual observation followed by deconvolution operations to decode the map.It learns a structured map and pose representations.It is trained with supervised learning with binary cross-entropy loss for map prediction and mean-squared loss for pose prediction.Global Policy uses the predicted map and agent pose to produce a long-term goal which is converted to a short-term goal using analytical path-planning (like Dijkstra or A*) on the current map.It uses a CNN to produce a long-term goal.It operates at a course time-scale, once every 25 steps.It is trained using reinforcement learning with the increase in the explored area as the reward.Local Policy outputs navigational actions based on the current observation to reach the short-term goal.It uses a CNN + GRU.It operates at a fine time-scale, predicts a low-level navigation action every step, i.e., move-forward, turn-left or turn-right.It is trained using imitation learning with binary cross-entropy loss.
+
+Results
+We use the Habitat simulator with the Gibson and Matterport3D (MP3D) datasets for our experiments. In our exploration task setup, the objective to maximize the coverage in a fixed time budget of 1000 steps. Coverage is the total area in the map known to be traversable. We use two evaluation metrics, the absolute coverage area in \(m^2\) (Cov) and the percentage of area explored in the scene (% Cov).
+Exploration performance of the proposed model, Active Neural SLAM (ANS) and baselines.Baselines adapted from [1] Lample & Chaplot. AAAI-17,  [2] Mirowski et al. ICLR-17,  [3] Chen el al. ICLR-19.
+We use 4 baselines based on end-to-end RL. All models are trained on Gibson training scenes and tested on (1) Gibson val set, and (2) MP3D test set (domain generalization). ANS outperforms baselines by a large margin on both test sets in terms of final coverage (see table above), and in terms of exploration efficiency (see plot below).
+Plot showing the % Coverage as the episode progresses in large and small scenes.
+What makes Neural SLAM better?
+Inductive bias using Neural SLAM: Instead of letting the model figure out what is useful in the RGB observation for exploration, we tell it explicitly what to predict (i.e. map and pose). This leads to better generalization and sample efficiency.Reducing exploration search-space: The Global Policy operates at a course time-scale, picking a long-term goal every 25 steps. This reduces the time horizon for exploration, what needed 100 low-level navigation actions to be explored, can now be explored in 4 high-level actions.Path-Planning comes for free: End-to-end RL needs to learn path-planning implicitly, which is super data-intensive to learn. The Active Neural SLAM model does not need to learn planning. Because we use an explicit map representation, we can simply use classical planning algorithms.
+PointGoal Task Transfer
+
+
+In the PointGoal task, the objective is to navigate to a goal location whose relative coordinates are given as input. The Active Neural SLAM model can be directly transferred to the PointGoal task without any additional training by just changing the Global policy to always output the PointGoal coordinates as the long-term goal. The ANS model trained for Exploration, when transferred to the PointGoal task can outperform all the baselines trained for the PointGoal Task by a large margin. It  was the winner of the CVPR 2019 Habitat PointGoal Navigation Challenge.
+
+
+PointGoal Task
+
+
+Top 5 entries on CVPR 2019 Habitat PointGoal Navigation Challenge Leaderboard
+Real-world Transfer
+Our goal is to get these models to work not just in simulation but in the real-world. It is difficult to transfer navigation models to the real-world due visual and physical domain gap. While simulation environments based on real-world reconstructions close the visual domain gap,  the perfect agent motion and pose sensor in the simulation were unrealistic. 
+In order to bridge this physical domain gap, we collect motion and sensor data in the real-world to create realistic noise models. We then train our exploration policy with noisy motion and pose sensors in the simulation using these noise models. Furthermore, due to the modularity, the pose estimation and global policy work directly on the map space, which is domain invariant. This allowed us to successfully transfer the trained Active Neural SLAM policy on the Locobot hardware platform using the PyRobot API. 
+Exploration using Active Neural SLAM in the real-world. The observations seen by the agent are shown on the left and the predicted map and pose are shown on the right. The obstacles are shown in green, explored are is shown in light blue, the long-term goal is shown in dark blue and agent pose and trajectory are shown in red. The Active Neural SLAM model is able to explore the whole apartment efficiently.
+
+Discussion and Next Steps
+We presented a modular navigation system which leverages the strengths of both classical and learning-based methods. The use of learning provides flexibility with respect to input modalities (in the SLAM module), leverages structural regularities of the world (in global policies), and provides robustness to errors in state estimation (in local policies). It leads to significantly higher performance and up to 75 times better sample efficiency as compared to end-to-end reinforcement learning. Domain invariance of pose estimation & global policy, and realistic motion & sensor noise models allowed us to successfully transfer the model to the real-world. The Active Neural SLAM model can be further improved by incorporating explicit semantics and adding relocalization capabilities.
+Incorporating Semantics: The current model only builds an obstacle map, without any explicit semantics. Incorporating semantics in the map and learning task-specific exploration are some challenges to tackle tasks such as Image Goal or Object Goal Navigation.
+Relocalization: The current model can be coupled with prior relocalization techniques to add the ability to relocalize in a previously constructed map for more efficient navigation in known environments. Relocalization can also help in better pose estimation by mitigating pose drift.
+Interested in more details?
+Check out the links to the paper, complete codebase with pre-trained models, talk, slides and project webpage below.
+
+Paper
+Code
+Talk
+Slides
+Webpage
+
+This blog post was based on the following paper :Devendra Singh Chaplot, Dhiraj Gandhi, Saurabh Gupta, Abhinav Gupta, and Ruslan Salakhutdinov. Learning To Explore Using Active Neural SLAM. In International Conference on Learning Representations (ICLR), 2020.
+
+planningreinforcement learningroboticssim2realSLAM
+
+
+
+
+♥268
+ 14786
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+
+ CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+
+You Might Also Like
+
+
+
+FACT Diagnostic: How to Better Understand Trade-offs Involving Group Fairness
+October 12, 2020
+
+
+
+Are Sixteen Heads Really Better than One?
+March 20, 2020
+
+
+
+Two Experiments in Peer Review: Posting Preprints and Citation Bias
+April 1, 2022
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+ 
+
+
+
+
+
+
+
+
+deep learning machine learning reinforcement learning Research
+Learning to Explore using Active Neural SLAM
+
+
+Authors
+Devendra Singh Chaplot 
+
+
+Affiliations
+
+
+Published
+                        June 19, 2020                    
+
+DOI
+
+
+
+
+
+
+
+
+Active Neural SLAM is a modular navigation system that learns to explore unseen indoor environments.
+
+Advances in machine learning, computer vision and robotics have opened up avenues of building intelligent robots which can navigate in the physical world and perform complex tasks in our homes and offices. Exploration is a key challenge in building intelligent navigation agents. When an autonomous agent is dropped in an unseen environment, it needs to explore as much of the environment as fast as possible.
+Efficient exploration in unknown environments
+Exploring efficiently in a large environment requires the agent to know 3 things:
+where it has been before (i.e. Mapping)where it is now (i.e. Pose Estimation)where it needs to go (i.e. Planning)
+How do we go about training autonomous exploration agents? One popular approach is using end-to-end deep Reinforcement Learning (RL). However, learning about mapping, pose estimation and planning implicitly in an end-to-end fashion is expensive and sample inefficient. This makes prior methods based on end-to-end RL ineffective at exploration in large environments. 
+In order to overcome these limitations, we present a modular system called Active Neural SLAM. It builds on ideas from Simultaneous Localization and Mapping literature in classical robotics and leverages learning for better performance and robustness. It uses structured spatial representations, hierarchical policies and analytical planners for learning to explore effectively in large scenes.
+
+Active Neural SLAM
+Overview of Active Neural SLAM model.
+Active Neural SLAM (ANS) model consists of three components:
+Neural SLAM Module predicts the map of the environment and the agent pose based on the current observation and previous prediction:It uses convolutional operations to encode the visual observation followed by deconvolution operations to decode the map.It learns a structured map and pose representations.It is trained with supervised learning with binary cross-entropy loss for map prediction and mean-squared loss for pose prediction.Global Policy uses the predicted map and agent pose to produce a long-term goal which is converted to a short-term goal using analytical path-planning (like Dijkstra or A*) on the current map.It uses a CNN to produce a long-term goal.It operates at a course time-scale, once every 25 steps.It is trained using reinforcement learning with the increase in the explored area as the reward.Local Policy outputs navigational actions based on the current observation to reach the short-term goal.It uses a CNN + GRU.It operates at a fine time-scale, predicts a low-level navigation action every step, i.e., move-forward, turn-left or turn-right.It is trained using imitation learning with binary cross-entropy loss.
+
+Results
+We use the Habitat simulator with the Gibson and Matterport3D (MP3D) datasets for our experiments. In our exploration task setup, the objective to maximize the coverage in a fixed time budget of 1000 steps. Coverage is the total area in the map known to be traversable. We use two evaluation metrics, the absolute coverage area in \(m^2\) (Cov) and the percentage of area explored in the scene (% Cov).
+Exploration performance of the proposed model, Active Neural SLAM (ANS) and baselines.Baselines adapted from [1] Lample & Chaplot. AAAI-17,  [2] Mirowski et al. ICLR-17,  [3] Chen el al. ICLR-19.
+We use 4 baselines based on end-to-end RL. All models are trained on Gibson training scenes and tested on (1) Gibson val set, and (2) MP3D test set (domain generalization). ANS outperforms baselines by a large margin on both test sets in terms of final coverage (see table above), and in terms of exploration efficiency (see plot below).
+Plot showing the % Coverage as the episode progresses in large and small scenes.
+What makes Neural SLAM better?
+Inductive bias using Neural SLAM: Instead of letting the model figure out what is useful in the RGB observation for exploration, we tell it explicitly what to predict (i.e. map and pose). This leads to better generalization and sample efficiency.Reducing exploration search-space: The Global Policy operates at a course time-scale, picking a long-term goal every 25 steps. This reduces the time horizon for exploration, what needed 100 low-level navigation actions to be explored, can now be explored in 4 high-level actions.Path-Planning comes for free: End-to-end RL needs to learn path-planning implicitly, which is super data-intensive to learn. The Active Neural SLAM model does not need to learn planning. Because we use an explicit map representation, we can simply use classical planning algorithms.
+PointGoal Task Transfer
+
+
+In the PointGoal task, the objective is to navigate to a goal location whose relative coordinates are given as input. The Active Neural SLAM model can be directly transferred to the PointGoal task without any additional training by just changing the Global policy to always output the PointGoal coordinates as the long-term goal. The ANS model trained for Exploration, when transferred to the PointGoal task can outperform all the baselines trained for the PointGoal Task by a large margin. It  was the winner of the CVPR 2019 Habitat PointGoal Navigation Challenge.
+
+
+PointGoal Task
+
+
+Top 5 entries on CVPR 2019 Habitat PointGoal Navigation Challenge Leaderboard
+Real-world Transfer
+Our goal is to get these models to work not just in simulation but in the real-world. It is difficult to transfer navigation models to the real-world due visual and physical domain gap. While simulation environments based on real-world reconstructions close the visual domain gap,  the perfect agent motion and pose sensor in the simulation were unrealistic. 
+In order to bridge this physical domain gap, we collect motion and sensor data in the real-world to create realistic noise models. We then train our exploration policy with noisy motion and pose sensors in the simulation using these noise models. Furthermore, due to the modularity, the pose estimation and global policy work directly on the map space, which is domain invariant. This allowed us to successfully transfer the trained Active Neural SLAM policy on the Locobot hardware platform using the PyRobot API. 
+Exploration using Active Neural SLAM in the real-world. The observations seen by the agent are shown on the left and the predicted map and pose are shown on the right. The obstacles are shown in green, explored are is shown in light blue, the long-term goal is shown in dark blue and agent pose and trajectory are shown in red. The Active Neural SLAM model is able to explore the whole apartment efficiently.
+
+Discussion and Next Steps
+We presented a modular navigation system which leverages the strengths of both classical and learning-based methods. The use of learning provides flexibility with respect to input modalities (in the SLAM module), leverages structural regularities of the world (in global policies), and provides robustness to errors in state estimation (in local policies). It leads to significantly higher performance and up to 75 times better sample efficiency as compared to end-to-end reinforcement learning. Domain invariance of pose estimation & global policy, and realistic motion & sensor noise models allowed us to successfully transfer the model to the real-world. The Active Neural SLAM model can be further improved by incorporating explicit semantics and adding relocalization capabilities.
+Incorporating Semantics: The current model only builds an obstacle map, without any explicit semantics. Incorporating semantics in the map and learning task-specific exploration are some challenges to tackle tasks such as Image Goal or Object Goal Navigation.
+Relocalization: The current model can be coupled with prior relocalization techniques to add the ability to relocalize in a previously constructed map for more efficient navigation in known environments. Relocalization can also help in better pose estimation by mitigating pose drift.
+Interested in more details?
+Check out the links to the paper, complete codebase with pre-trained models, talk, slides and project webpage below.
+
+Paper
+Code
+Talk
+Slides
+Webpage
+
+This blog post was based on the following paper :Devendra Singh Chaplot, Dhiraj Gandhi, Saurabh Gupta, Abhinav Gupta, and Ruslan Salakhutdinov. Learning To Explore Using Active Neural SLAM. In International Conference on Learning Representations (ICLR), 2020.
+
+planningreinforcement learningroboticssim2realSLAM
+
+
+
+
+♥268
+ 14786
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+
+ CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+
+You Might Also Like
+
+
+
+FACT Diagnostic: How to Better Understand Trade-offs Involving Group Fairness
+October 12, 2020
+
+
+
+Are Sixteen Heads Really Better than One?
+March 20, 2020
+
+
+
+Two Experiments in Peer Review: Posting Preprints and Citation Bias
+April 1, 2022
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+
+
+
+deep learning machine learning reinforcement learning Research
+Learning to Explore using Active Neural SLAM
+
+
+Authors
+Devendra Singh Chaplot 
+
+
+Affiliations
+
+
+Published
+                        June 19, 2020                    
+
+DOI
+
+
+
+
+
+
+
+
+Active Neural SLAM is a modular navigation system that learns to explore unseen indoor environments.
+
+Advances in machine learning, computer vision and robotics have opened up avenues of building intelligent robots which can navigate in the physical world and perform complex tasks in our homes and offices. Exploration is a key challenge in building intelligent navigation agents. When an autonomous agent is dropped in an unseen environment, it needs to explore as much of the environment as fast as possible.
+Efficient exploration in unknown environments
+Exploring efficiently in a large environment requires the agent to know 3 things:
+where it has been before (i.e. Mapping)where it is now (i.e. Pose Estimation)where it needs to go (i.e. Planning)
+How do we go about training autonomous exploration agents? One popular approach is using end-to-end deep Reinforcement Learning (RL). However, learning about mapping, pose estimation and planning implicitly in an end-to-end fashion is expensive and sample inefficient. This makes prior methods based on end-to-end RL ineffective at exploration in large environments. 
+In order to overcome these limitations, we present a modular system called Active Neural SLAM. It builds on ideas from Simultaneous Localization and Mapping literature in classical robotics and leverages learning for better performance and robustness. It uses structured spatial representations, hierarchical policies and analytical planners for learning to explore effectively in large scenes.
+
+Active Neural SLAM
+Overview of Active Neural SLAM model.
+Active Neural SLAM (ANS) model consists of three components:
+Neural SLAM Module predicts the map of the environment and the agent pose based on the current observation and previous prediction:It uses convolutional operations to encode the visual observation followed by deconvolution operations to decode the map.It learns a structured map and pose representations.It is trained with supervised learning with binary cross-entropy loss for map prediction and mean-squared loss for pose prediction.Global Policy uses the predicted map and agent pose to produce a long-term goal which is converted to a short-term goal using analytical path-planning (like Dijkstra or A*) on the current map.It uses a CNN to produce a long-term goal.It operates at a course time-scale, once every 25 steps.It is trained using reinforcement learning with the increase in the explored area as the reward.Local Policy outputs navigational actions based on the current observation to reach the short-term goal.It uses a CNN + GRU.It operates at a fine time-scale, predicts a low-level navigation action every step, i.e., move-forward, turn-left or turn-right.It is trained using imitation learning with binary cross-entropy loss.
+
+Results
+We use the Habitat simulator with the Gibson and Matterport3D (MP3D) datasets for our experiments. In our exploration task setup, the objective to maximize the coverage in a fixed time budget of 1000 steps. Coverage is the total area in the map known to be traversable. We use two evaluation metrics, the absolute coverage area in \(m^2\) (Cov) and the percentage of area explored in the scene (% Cov).
+Exploration performance of the proposed model, Active Neural SLAM (ANS) and baselines.Baselines adapted from [1] Lample & Chaplot. AAAI-17,  [2] Mirowski et al. ICLR-17,  [3] Chen el al. ICLR-19.
+We use 4 baselines based on end-to-end RL. All models are trained on Gibson training scenes and tested on (1) Gibson val set, and (2) MP3D test set (domain generalization). ANS outperforms baselines by a large margin on both test sets in terms of final coverage (see table above), and in terms of exploration efficiency (see plot below).
+Plot showing the % Coverage as the episode progresses in large and small scenes.
+What makes Neural SLAM better?
+Inductive bias using Neural SLAM: Instead of letting the model figure out what is useful in the RGB observation for exploration, we tell it explicitly what to predict (i.e. map and pose). This leads to better generalization and sample efficiency.Reducing exploration search-space: The Global Policy operates at a course time-scale, picking a long-term goal every 25 steps. This reduces the time horizon for exploration, what needed 100 low-level navigation actions to be explored, can now be explored in 4 high-level actions.Path-Planning comes for free: End-to-end RL needs to learn path-planning implicitly, which is super data-intensive to learn. The Active Neural SLAM model does not need to learn planning. Because we use an explicit map representation, we can simply use classical planning algorithms.
+PointGoal Task Transfer
+
+
+In the PointGoal task, the objective is to navigate to a goal location whose relative coordinates are given as input. The Active Neural SLAM model can be directly transferred to the PointGoal task without any additional training by just changing the Global policy to always output the PointGoal coordinates as the long-term goal. The ANS model trained for Exploration, when transferred to the PointGoal task can outperform all the baselines trained for the PointGoal Task by a large margin. It  was the winner of the CVPR 2019 Habitat PointGoal Navigation Challenge.
+
+
+PointGoal Task
+
+
+Top 5 entries on CVPR 2019 Habitat PointGoal Navigation Challenge Leaderboard
+Real-world Transfer
+Our goal is to get these models to work not just in simulation but in the real-world. It is difficult to transfer navigation models to the real-world due visual and physical domain gap. While simulation environments based on real-world reconstructions close the visual domain gap,  the perfect agent motion and pose sensor in the simulation were unrealistic. 
+In order to bridge this physical domain gap, we collect motion and sensor data in the real-world to create realistic noise models. We then train our exploration policy with noisy motion and pose sensors in the simulation using these noise models. Furthermore, due to the modularity, the pose estimation and global policy work directly on the map space, which is domain invariant. This allowed us to successfully transfer the trained Active Neural SLAM policy on the Locobot hardware platform using the PyRobot API. 
+Exploration using Active Neural SLAM in the real-world. The observations seen by the agent are shown on the left and the predicted map and pose are shown on the right. The obstacles are shown in green, explored are is shown in light blue, the long-term goal is shown in dark blue and agent pose and trajectory are shown in red. The Active Neural SLAM model is able to explore the whole apartment efficiently.
+
+Discussion and Next Steps
+We presented a modular navigation system which leverages the strengths of both classical and learning-based methods. The use of learning provides flexibility with respect to input modalities (in the SLAM module), leverages structural regularities of the world (in global policies), and provides robustness to errors in state estimation (in local policies). It leads to significantly higher performance and up to 75 times better sample efficiency as compared to end-to-end reinforcement learning. Domain invariance of pose estimation & global policy, and realistic motion & sensor noise models allowed us to successfully transfer the model to the real-world. The Active Neural SLAM model can be further improved by incorporating explicit semantics and adding relocalization capabilities.
+Incorporating Semantics: The current model only builds an obstacle map, without any explicit semantics. Incorporating semantics in the map and learning task-specific exploration are some challenges to tackle tasks such as Image Goal or Object Goal Navigation.
+Relocalization: The current model can be coupled with prior relocalization techniques to add the ability to relocalize in a previously constructed map for more efficient navigation in known environments. Relocalization can also help in better pose estimation by mitigating pose drift.
+Interested in more details?
+Check out the links to the paper, complete codebase with pre-trained models, talk, slides and project webpage below.
+
+Paper
+Code
+Talk
+Slides
+Webpage
+
+This blog post was based on the following paper :Devendra Singh Chaplot, Dhiraj Gandhi, Saurabh Gupta, Abhinav Gupta, and Ruslan Salakhutdinov. Learning To Explore Using Active Neural SLAM. In International Conference on Learning Representations (ICLR), 2020.
+
+planningreinforcement learningroboticssim2realSLAM
+
+
+
+
+♥268
+ 14786
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+
+ CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+
+You Might Also Like
+
+
+
+FACT Diagnostic: How to Better Understand Trade-offs Involving Group Fairness
+October 12, 2020
+
+
+
+Are Sixteen Heads Really Better than One?
+March 20, 2020
+
+
+
+Two Experiments in Peer Review: Posting Preprints and Citation Bias
+April 1, 2022
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+
+
+deep learning machine learning reinforcement learning Research
+Learning to Explore using Active Neural SLAM
+
+
+Authors
+Devendra Singh Chaplot 
+
+
+Affiliations
+
+
+Published
+                        June 19, 2020                    
+
+DOI
+
+
+
+
+
+
+
+
+Active Neural SLAM is a modular navigation system that learns to explore unseen indoor environments.
+
+Advances in machine learning, computer vision and robotics have opened up avenues of building intelligent robots which can navigate in the physical world and perform complex tasks in our homes and offices. Exploration is a key challenge in building intelligent navigation agents. When an autonomous agent is dropped in an unseen environment, it needs to explore as much of the environment as fast as possible.
+Efficient exploration in unknown environments
+Exploring efficiently in a large environment requires the agent to know 3 things:
+where it has been before (i.e. Mapping)where it is now (i.e. Pose Estimation)where it needs to go (i.e. Planning)
+How do we go about training autonomous exploration agents? One popular approach is using end-to-end deep Reinforcement Learning (RL). However, learning about mapping, pose estimation and planning implicitly in an end-to-end fashion is expensive and sample inefficient. This makes prior methods based on end-to-end RL ineffective at exploration in large environments. 
+In order to overcome these limitations, we present a modular system called Active Neural SLAM. It builds on ideas from Simultaneous Localization and Mapping literature in classical robotics and leverages learning for better performance and robustness. It uses structured spatial representations, hierarchical policies and analytical planners for learning to explore effectively in large scenes.
+
+Active Neural SLAM
+Overview of Active Neural SLAM model.
+Active Neural SLAM (ANS) model consists of three components:
+Neural SLAM Module predicts the map of the environment and the agent pose based on the current observation and previous prediction:It uses convolutional operations to encode the visual observation followed by deconvolution operations to decode the map.It learns a structured map and pose representations.It is trained with supervised learning with binary cross-entropy loss for map prediction and mean-squared loss for pose prediction.Global Policy uses the predicted map and agent pose to produce a long-term goal which is converted to a short-term goal using analytical path-planning (like Dijkstra or A*) on the current map.It uses a CNN to produce a long-term goal.It operates at a course time-scale, once every 25 steps.It is trained using reinforcement learning with the increase in the explored area as the reward.Local Policy outputs navigational actions based on the current observation to reach the short-term goal.It uses a CNN + GRU.It operates at a fine time-scale, predicts a low-level navigation action every step, i.e., move-forward, turn-left or turn-right.It is trained using imitation learning with binary cross-entropy loss.
+
+Results
+We use the Habitat simulator with the Gibson and Matterport3D (MP3D) datasets for our experiments. In our exploration task setup, the objective to maximize the coverage in a fixed time budget of 1000 steps. Coverage is the total area in the map known to be traversable. We use two evaluation metrics, the absolute coverage area in \(m^2\) (Cov) and the percentage of area explored in the scene (% Cov).
+Exploration performance of the proposed model, Active Neural SLAM (ANS) and baselines.Baselines adapted from [1] Lample & Chaplot. AAAI-17,  [2] Mirowski et al. ICLR-17,  [3] Chen el al. ICLR-19.
+We use 4 baselines based on end-to-end RL. All models are trained on Gibson training scenes and tested on (1) Gibson val set, and (2) MP3D test set (domain generalization). ANS outperforms baselines by a large margin on both test sets in terms of final coverage (see table above), and in terms of exploration efficiency (see plot below).
+Plot showing the % Coverage as the episode progresses in large and small scenes.
+What makes Neural SLAM better?
+Inductive bias using Neural SLAM: Instead of letting the model figure out what is useful in the RGB observation for exploration, we tell it explicitly what to predict (i.e. map and pose). This leads to better generalization and sample efficiency.Reducing exploration search-space: The Global Policy operates at a course time-scale, picking a long-term goal every 25 steps. This reduces the time horizon for exploration, what needed 100 low-level navigation actions to be explored, can now be explored in 4 high-level actions.Path-Planning comes for free: End-to-end RL needs to learn path-planning implicitly, which is super data-intensive to learn. The Active Neural SLAM model does not need to learn planning. Because we use an explicit map representation, we can simply use classical planning algorithms.
+PointGoal Task Transfer
+
+
+In the PointGoal task, the objective is to navigate to a goal location whose relative coordinates are given as input. The Active Neural SLAM model can be directly transferred to the PointGoal task without any additional training by just changing the Global policy to always output the PointGoal coordinates as the long-term goal. The ANS model trained for Exploration, when transferred to the PointGoal task can outperform all the baselines trained for the PointGoal Task by a large margin. It  was the winner of the CVPR 2019 Habitat PointGoal Navigation Challenge.
+
+
+PointGoal Task
+
+
+Top 5 entries on CVPR 2019 Habitat PointGoal Navigation Challenge Leaderboard
+Real-world Transfer
+Our goal is to get these models to work not just in simulation but in the real-world. It is difficult to transfer navigation models to the real-world due visual and physical domain gap. While simulation environments based on real-world reconstructions close the visual domain gap,  the perfect agent motion and pose sensor in the simulation were unrealistic. 
+In order to bridge this physical domain gap, we collect motion and sensor data in the real-world to create realistic noise models. We then train our exploration policy with noisy motion and pose sensors in the simulation using these noise models. Furthermore, due to the modularity, the pose estimation and global policy work directly on the map space, which is domain invariant. This allowed us to successfully transfer the trained Active Neural SLAM policy on the Locobot hardware platform using the PyRobot API. 
+Exploration using Active Neural SLAM in the real-world. The observations seen by the agent are shown on the left and the predicted map and pose are shown on the right. The obstacles are shown in green, explored are is shown in light blue, the long-term goal is shown in dark blue and agent pose and trajectory are shown in red. The Active Neural SLAM model is able to explore the whole apartment efficiently.
+
+Discussion and Next Steps
+We presented a modular navigation system which leverages the strengths of both classical and learning-based methods. The use of learning provides flexibility with respect to input modalities (in the SLAM module), leverages structural regularities of the world (in global policies), and provides robustness to errors in state estimation (in local policies). It leads to significantly higher performance and up to 75 times better sample efficiency as compared to end-to-end reinforcement learning. Domain invariance of pose estimation & global policy, and realistic motion & sensor noise models allowed us to successfully transfer the model to the real-world. The Active Neural SLAM model can be further improved by incorporating explicit semantics and adding relocalization capabilities.
+Incorporating Semantics: The current model only builds an obstacle map, without any explicit semantics. Incorporating semantics in the map and learning task-specific exploration are some challenges to tackle tasks such as Image Goal or Object Goal Navigation.
+Relocalization: The current model can be coupled with prior relocalization techniques to add the ability to relocalize in a previously constructed map for more efficient navigation in known environments. Relocalization can also help in better pose estimation by mitigating pose drift.
+Interested in more details?
+Check out the links to the paper, complete codebase with pre-trained models, talk, slides and project webpage below.
+
+Paper
+Code
+Talk
+Slides
+Webpage
+
+This blog post was based on the following paper :Devendra Singh Chaplot, Dhiraj Gandhi, Saurabh Gupta, Abhinav Gupta, and Ruslan Salakhutdinov. Learning To Explore Using Active Neural SLAM. In International Conference on Learning Representations (ICLR), 2020.
+
+planningreinforcement learningroboticssim2realSLAM
+
+
+
+
+♥268
+ 14786
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+
+ CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+
+You Might Also Like
+
+
+
+FACT Diagnostic: How to Better Understand Trade-offs Involving Group Fairness
+October 12, 2020
+
+
+
+Are Sixteen Heads Really Better than One?
+March 20, 2020
+
+
+
+Two Experiments in Peer Review: Posting Preprints and Citation Bias
+April 1, 2022
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+
+
+deep learning machine learning reinforcement learning Research
+Learning to Explore using Active Neural SLAM
+
+
+Authors
+Devendra Singh Chaplot 
+
+
+Affiliations
+
+
+Published
+                        June 19, 2020                    
+
+DOI
+
+
+
+
+
+
+
+
+Active Neural SLAM is a modular navigation system that learns to explore unseen indoor environments.
+
+Advances in machine learning, computer vision and robotics have opened up avenues of building intelligent robots which can navigate in the physical world and perform complex tasks in our homes and offices. Exploration is a key challenge in building intelligent navigation agents. When an autonomous agent is dropped in an unseen environment, it needs to explore as much of the environment as fast as possible.
+Efficient exploration in unknown environments
+Exploring efficiently in a large environment requires the agent to know 3 things:
+where it has been before (i.e. Mapping)where it is now (i.e. Pose Estimation)where it needs to go (i.e. Planning)
+How do we go about training autonomous exploration agents? One popular approach is using end-to-end deep Reinforcement Learning (RL). However, learning about mapping, pose estimation and planning implicitly in an end-to-end fashion is expensive and sample inefficient. This makes prior methods based on end-to-end RL ineffective at exploration in large environments. 
+In order to overcome these limitations, we present a modular system called Active Neural SLAM. It builds on ideas from Simultaneous Localization and Mapping literature in classical robotics and leverages learning for better performance and robustness. It uses structured spatial representations, hierarchical policies and analytical planners for learning to explore effectively in large scenes.
+
+Active Neural SLAM
+Overview of Active Neural SLAM model.
+Active Neural SLAM (ANS) model consists of three components:
+Neural SLAM Module predicts the map of the environment and the agent pose based on the current observation and previous prediction:It uses convolutional operations to encode the visual observation followed by deconvolution operations to decode the map.It learns a structured map and pose representations.It is trained with supervised learning with binary cross-entropy loss for map prediction and mean-squared loss for pose prediction.Global Policy uses the predicted map and agent pose to produce a long-term goal which is converted to a short-term goal using analytical path-planning (like Dijkstra or A*) on the current map.It uses a CNN to produce a long-term goal.It operates at a course time-scale, once every 25 steps.It is trained using reinforcement learning with the increase in the explored area as the reward.Local Policy outputs navigational actions based on the current observation to reach the short-term goal.It uses a CNN + GRU.It operates at a fine time-scale, predicts a low-level navigation action every step, i.e., move-forward, turn-left or turn-right.It is trained using imitation learning with binary cross-entropy loss.
+
+Results
+We use the Habitat simulator with the Gibson and Matterport3D (MP3D) datasets for our experiments. In our exploration task setup, the objective to maximize the coverage in a fixed time budget of 1000 steps. Coverage is the total area in the map known to be traversable. We use two evaluation metrics, the absolute coverage area in \(m^2\) (Cov) and the percentage of area explored in the scene (% Cov).
+Exploration performance of the proposed model, Active Neural SLAM (ANS) and baselines.Baselines adapted from [1] Lample & Chaplot. AAAI-17,  [2] Mirowski et al. ICLR-17,  [3] Chen el al. ICLR-19.
+We use 4 baselines based on end-to-end RL. All models are trained on Gibson training scenes and tested on (1) Gibson val set, and (2) MP3D test set (domain generalization). ANS outperforms baselines by a large margin on both test sets in terms of final coverage (see table above), and in terms of exploration efficiency (see plot below).
+Plot showing the % Coverage as the episode progresses in large and small scenes.
+What makes Neural SLAM better?
+Inductive bias using Neural SLAM: Instead of letting the model figure out what is useful in the RGB observation for exploration, we tell it explicitly what to predict (i.e. map and pose). This leads to better generalization and sample efficiency.Reducing exploration search-space: The Global Policy operates at a course time-scale, picking a long-term goal every 25 steps. This reduces the time horizon for exploration, what needed 100 low-level navigation actions to be explored, can now be explored in 4 high-level actions.Path-Planning comes for free: End-to-end RL needs to learn path-planning implicitly, which is super data-intensive to learn. The Active Neural SLAM model does not need to learn planning. Because we use an explicit map representation, we can simply use classical planning algorithms.
+PointGoal Task Transfer
+
+
+In the PointGoal task, the objective is to navigate to a goal location whose relative coordinates are given as input. The Active Neural SLAM model can be directly transferred to the PointGoal task without any additional training by just changing the Global policy to always output the PointGoal coordinates as the long-term goal. The ANS model trained for Exploration, when transferred to the PointGoal task can outperform all the baselines trained for the PointGoal Task by a large margin. It  was the winner of the CVPR 2019 Habitat PointGoal Navigation Challenge.
+
+
+PointGoal Task
+
+
+Top 5 entries on CVPR 2019 Habitat PointGoal Navigation Challenge Leaderboard
+Real-world Transfer
+Our goal is to get these models to work not just in simulation but in the real-world. It is difficult to transfer navigation models to the real-world due visual and physical domain gap. While simulation environments based on real-world reconstructions close the visual domain gap,  the perfect agent motion and pose sensor in the simulation were unrealistic. 
+In order to bridge this physical domain gap, we collect motion and sensor data in the real-world to create realistic noise models. We then train our exploration policy with noisy motion and pose sensors in the simulation using these noise models. Furthermore, due to the modularity, the pose estimation and global policy work directly on the map space, which is domain invariant. This allowed us to successfully transfer the trained Active Neural SLAM policy on the Locobot hardware platform using the PyRobot API. 
+Exploration using Active Neural SLAM in the real-world. The observations seen by the agent are shown on the left and the predicted map and pose are shown on the right. The obstacles are shown in green, explored are is shown in light blue, the long-term goal is shown in dark blue and agent pose and trajectory are shown in red. The Active Neural SLAM model is able to explore the whole apartment efficiently.
+
+Discussion and Next Steps
+We presented a modular navigation system which leverages the strengths of both classical and learning-based methods. The use of learning provides flexibility with respect to input modalities (in the SLAM module), leverages structural regularities of the world (in global policies), and provides robustness to errors in state estimation (in local policies). It leads to significantly higher performance and up to 75 times better sample efficiency as compared to end-to-end reinforcement learning. Domain invariance of pose estimation & global policy, and realistic motion & sensor noise models allowed us to successfully transfer the model to the real-world. The Active Neural SLAM model can be further improved by incorporating explicit semantics and adding relocalization capabilities.
+Incorporating Semantics: The current model only builds an obstacle map, without any explicit semantics. Incorporating semantics in the map and learning task-specific exploration are some challenges to tackle tasks such as Image Goal or Object Goal Navigation.
+Relocalization: The current model can be coupled with prior relocalization techniques to add the ability to relocalize in a previously constructed map for more efficient navigation in known environments. Relocalization can also help in better pose estimation by mitigating pose drift.
+Interested in more details?
+Check out the links to the paper, complete codebase with pre-trained models, talk, slides and project webpage below.
+
+Paper
+Code
+Talk
+Slides
+Webpage
+
+This blog post was based on the following paper :Devendra Singh Chaplot, Dhiraj Gandhi, Saurabh Gupta, Abhinav Gupta, and Ruslan Salakhutdinov. Learning To Explore Using Active Neural SLAM. In International Conference on Learning Representations (ICLR), 2020.
+
+planningreinforcement learningroboticssim2realSLAM
+
+
+
+
+♥268
+ 14786
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+
+ CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+
+You Might Also Like
+
+
+
+FACT Diagnostic: How to Better Understand Trade-offs Involving Group Fairness
+October 12, 2020
+
+
+
+Are Sixteen Heads Really Better than One?
+March 20, 2020
+
+
+
+Two Experiments in Peer Review: Posting Preprints and Citation Bias
+April 1, 2022
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+
+
+
+deep learning machine learning reinforcement learning Research
+Learning to Explore using Active Neural SLAM
+
+
+Authors
+Devendra Singh Chaplot 
+
+
+Affiliations
+
+
+Published
+                        June 19, 2020                    
+
+DOI
+
+
+
+
+
+
+
+
+Active Neural SLAM is a modular navigation system that learns to explore unseen indoor environments.
+
+Advances in machine learning, computer vision and robotics have opened up avenues of building intelligent robots which can navigate in the physical world and perform complex tasks in our homes and offices. Exploration is a key challenge in building intelligent navigation agents. When an autonomous agent is dropped in an unseen environment, it needs to explore as much of the environment as fast as possible.
+Efficient exploration in unknown environments
+Exploring efficiently in a large environment requires the agent to know 3 things:
+where it has been before (i.e. Mapping)where it is now (i.e. Pose Estimation)where it needs to go (i.e. Planning)
+How do we go about training autonomous exploration agents? One popular approach is using end-to-end deep Reinforcement Learning (RL). However, learning about mapping, pose estimation and planning implicitly in an end-to-end fashion is expensive and sample inefficient. This makes prior methods based on end-to-end RL ineffective at exploration in large environments. 
+In order to overcome these limitations, we present a modular system called Active Neural SLAM. It builds on ideas from Simultaneous Localization and Mapping literature in classical robotics and leverages learning for better performance and robustness. It uses structured spatial representations, hierarchical policies and analytical planners for learning to explore effectively in large scenes.
+
+Active Neural SLAM
+Overview of Active Neural SLAM model.
+Active Neural SLAM (ANS) model consists of three components:
+Neural SLAM Module predicts the map of the environment and the agent pose based on the current observation and previous prediction:It uses convolutional operations to encode the visual observation followed by deconvolution operations to decode the map.It learns a structured map and pose representations.It is trained with supervised learning with binary cross-entropy loss for map prediction and mean-squared loss for pose prediction.Global Policy uses the predicted map and agent pose to produce a long-term goal which is converted to a short-term goal using analytical path-planning (like Dijkstra or A*) on the current map.It uses a CNN to produce a long-term goal.It operates at a course time-scale, once every 25 steps.It is trained using reinforcement learning with the increase in the explored area as the reward.Local Policy outputs navigational actions based on the current observation to reach the short-term goal.It uses a CNN + GRU.It operates at a fine time-scale, predicts a low-level navigation action every step, i.e., move-forward, turn-left or turn-right.It is trained using imitation learning with binary cross-entropy loss.
+
+Results
+We use the Habitat simulator with the Gibson and Matterport3D (MP3D) datasets for our experiments. In our exploration task setup, the objective to maximize the coverage in a fixed time budget of 1000 steps. Coverage is the total area in the map known to be traversable. We use two evaluation metrics, the absolute coverage area in \(m^2\) (Cov) and the percentage of area explored in the scene (% Cov).
+Exploration performance of the proposed model, Active Neural SLAM (ANS) and baselines.Baselines adapted from [1] Lample & Chaplot. AAAI-17,  [2] Mirowski et al. ICLR-17,  [3] Chen el al. ICLR-19.
+We use 4 baselines based on end-to-end RL. All models are trained on Gibson training scenes and tested on (1) Gibson val set, and (2) MP3D test set (domain generalization). ANS outperforms baselines by a large margin on both test sets in terms of final coverage (see table above), and in terms of exploration efficiency (see plot below).
+Plot showing the % Coverage as the episode progresses in large and small scenes.
+What makes Neural SLAM better?
+Inductive bias using Neural SLAM: Instead of letting the model figure out what is useful in the RGB observation for exploration, we tell it explicitly what to predict (i.e. map and pose). This leads to better generalization and sample efficiency.Reducing exploration search-space: The Global Policy operates at a course time-scale, picking a long-term goal every 25 steps. This reduces the time horizon for exploration, what needed 100 low-level navigation actions to be explored, can now be explored in 4 high-level actions.Path-Planning comes for free: End-to-end RL needs to learn path-planning implicitly, which is super data-intensive to learn. The Active Neural SLAM model does not need to learn planning. Because we use an explicit map representation, we can simply use classical planning algorithms.
+PointGoal Task Transfer
+
+
+In the PointGoal task, the objective is to navigate to a goal location whose relative coordinates are given as input. The Active Neural SLAM model can be directly transferred to the PointGoal task without any additional training by just changing the Global policy to always output the PointGoal coordinates as the long-term goal. The ANS model trained for Exploration, when transferred to the PointGoal task can outperform all the baselines trained for the PointGoal Task by a large margin. It  was the winner of the CVPR 2019 Habitat PointGoal Navigation Challenge.
+
+
+PointGoal Task
+
+
+Top 5 entries on CVPR 2019 Habitat PointGoal Navigation Challenge Leaderboard
+Real-world Transfer
+Our goal is to get these models to work not just in simulation but in the real-world. It is difficult to transfer navigation models to the real-world due visual and physical domain gap. While simulation environments based on real-world reconstructions close the visual domain gap,  the perfect agent motion and pose sensor in the simulation were unrealistic. 
+In order to bridge this physical domain gap, we collect motion and sensor data in the real-world to create realistic noise models. We then train our exploration policy with noisy motion and pose sensors in the simulation using these noise models. Furthermore, due to the modularity, the pose estimation and global policy work directly on the map space, which is domain invariant. This allowed us to successfully transfer the trained Active Neural SLAM policy on the Locobot hardware platform using the PyRobot API. 
+Exploration using Active Neural SLAM in the real-world. The observations seen by the agent are shown on the left and the predicted map and pose are shown on the right. The obstacles are shown in green, explored are is shown in light blue, the long-term goal is shown in dark blue and agent pose and trajectory are shown in red. The Active Neural SLAM model is able to explore the whole apartment efficiently.
+
+Discussion and Next Steps
+We presented a modular navigation system which leverages the strengths of both classical and learning-based methods. The use of learning provides flexibility with respect to input modalities (in the SLAM module), leverages structural regularities of the world (in global policies), and provides robustness to errors in state estimation (in local policies). It leads to significantly higher performance and up to 75 times better sample efficiency as compared to end-to-end reinforcement learning. Domain invariance of pose estimation & global policy, and realistic motion & sensor noise models allowed us to successfully transfer the model to the real-world. The Active Neural SLAM model can be further improved by incorporating explicit semantics and adding relocalization capabilities.
+Incorporating Semantics: The current model only builds an obstacle map, without any explicit semantics. Incorporating semantics in the map and learning task-specific exploration are some challenges to tackle tasks such as Image Goal or Object Goal Navigation.
+Relocalization: The current model can be coupled with prior relocalization techniques to add the ability to relocalize in a previously constructed map for more efficient navigation in known environments. Relocalization can also help in better pose estimation by mitigating pose drift.
+Interested in more details?
+Check out the links to the paper, complete codebase with pre-trained models, talk, slides and project webpage below.
+
+Paper
+Code
+Talk
+Slides
+Webpage
+
+This blog post was based on the following paper :Devendra Singh Chaplot, Dhiraj Gandhi, Saurabh Gupta, Abhinav Gupta, and Ruslan Salakhutdinov. Learning To Explore Using Active Neural SLAM. In International Conference on Learning Representations (ICLR), 2020.
+
+planningreinforcement learningroboticssim2realSLAM
+
+
+
+
+♥268
+ 14786
+
+
+Read More
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Understanding the Prevalence of SARS-CoV-2 with Limited Diagnostic Testing Capacity
+
+ CATER: A diagnostic dataset for Compositional Actions and Temporal Reasoning
+
+You Might Also Like
+
+
+
+FACT Diagnostic: How to Better Understand Trade-offs Involving Group Fairness
+October 12, 2020
+
+
+
+Are Sixteen Heads Really Better than One?
+March 20, 2020
+
+
+
+Two Experiments in Peer Review: Posting Preprints and Citation Bias
+April 1, 2022
+
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+ 
+deep learning machine learning reinforcement learning Research
+Learning to Explore using Active Neural SLAM
+
+
+Authors
+Devendra Singh Chaplot 
+
+
+Affiliations
+
+
+Published
+                        June 19, 2020                    
+
+DOI
+
+
+
+
+Authors
+Devendra Singh Chaplot 
+
+
+Affiliations
+
+
+Published
+                        June 19, 2020                    
+
+DOI
+
+
+Authors
+Devendra Singh Chaplot 
+Affiliations
+
+Published
+                        June 19, 2020                    
+DOI
+
+
+
+
+Active Neural SLAM is a modular navigation system that learns to explore unseen indoor environments.
+
+Advances in machine learning, computer vision and robotics have opened up avenues of building intelligent robots which can navigate in the physical world and perform complex tasks in our homes and offices. Exploration is a key challenge in building intelligent navigation agents. When an autonomous agent is dropped in an unseen environment, it needs to explore as much of the environment as fast as possible.
+Efficient exploration in unknown environments
+Exploring efficiently in a large environment requires the agent to know 3 things:
+where it has been before (i.e. Mapping)where it is now (i.e. Pose Estimation)where it needs to go (i.e. Planning)
+How do we go about training autonomous exploration agents? One popular approach is using end-to-end deep Reinforcement Learning (RL). However, learning about mapping, pose estimation and planning implicitly in an end-to-end fashion is expensive and sample inefficient. This makes prior methods based on end-to-end RL ineffective at exploration in large environments. 
+In order to overcome these limitations, we present a modular system called Active Neural SLAM. It builds on ideas from Simultaneous Localization and Mapping literature in classical robotics and leverages learning for better performance and robustness. It uses structured spatial representations, hierarchical policies and analytical planners for learning to explore effectively in large scenes.
+
+Active Neural SLAM
+Overview of Active Neural SLAM model.
+Active Neural SLAM (ANS) model consists of three components:
+Neural SLAM Module predicts the map of the environment and the agent pose based on the current observation and previous prediction:It uses convolutional operations to encode the visual observation followed by deconvolution operations to decode the map.It learns a structured map and pose representations.It is trained with supervised learning with binary cross-entropy loss for map prediction and mean-squared loss for pose prediction.Global Policy uses the predicted map and agent pose to produce a long-term goal which is converted to a short-term goal using analytical path-planning (like Dijkstra or A*) on the current map.It uses a CNN to produce a long-term goal.It operates at a course time-scale, once every 25 steps.It is trained using reinforcement learning with the increase in the explored area as the reward.Local Policy outputs navigational actions based on the current observation to reach the short-term goal.It uses a CNN + GRU.It operates at a fine time-scale, predicts a low-level navigation action every step, i.e., move-forward, turn-left or turn-right.It is trained using imitation learning with binary cross-entropy loss.
+
+Results
+We use the Habitat simulator with the Gibson and Matterport3D (MP3D) datasets for our experiments. In our exploration task setup, the objective to maximize the coverage in a fixed time budget of 1000 steps. Coverage is the total area in the map known to be traversable. We use two evaluation metrics, the absolute coverage area in \(m^2\) (Cov) and the percentage of area explored in the scene (% Cov).
+Exploration performance of the proposed model, Active Neural SLAM (ANS) and baselines.Baselines adapted from [1] Lample & Chaplot. AAAI-17,  [2] Mirowski et al. ICLR-17,  [3] Chen el al. ICLR-19.
+We use 4 baselines based on end-to-end RL. All models are trained on Gibson training scenes and tested on (1) Gibson val set, and (2) MP3D test set (domain generalization). ANS outperforms baselines by a large margin on both test sets in terms of final coverage (see table above), and in terms of exploration efficiency (see plot below).
+Plot showing the % Coverage as the episode progresses in large and small scenes.
+What makes Neural SLAM better?
+Inductive bias using Neural SLAM: Instead of letting the model figure out what is useful in the RGB observation for exploration, we tell it explicitly what to predict (i.e. map and pose). This leads to better generalization and sample efficiency.Reducing exploration search-space: The Global Policy operates at a course time-scale, picking a long-term goal every 25 steps. This reduces the time horizon for exploration, what needed 100 low-level navigation actions to be explored, can now be explored in 4 high-level actions.Path-Planning comes for free: End-to-end RL needs to learn path-planning implicitly, which is super data-intensive to learn. The Active Neural SLAM model does not need to learn planning. Because we use an explicit map representation, we can simply use classical planning algorithms.
+PointGoal Task Transfer
+
+
+In the PointGoal task, the objective is to navigate to a goal location whose relative coordinates are given as input. The Active Neural SLAM model can be directly transferred to the PointGoal task without any additional training by just changing the Global policy to always output the PointGoal coordinates as the long-term goal. The ANS model trained for Exploration, when transferred to the PointGoal task can outperform all the baselines trained for the PointGoal Task by a large margin. It  was the winner of the CVPR 2019 Habitat PointGoal Navigation Challenge.
+
+
+PointGoal Task
+
+
+Top 5 entries on CVPR 2019 Habitat PointGoal Navigation Challenge Leaderboard
+Real-world Transfer
+Our goal is to get these models to work not just in simulation but in the real-world. It is difficult to transfer navigation models to the real-world due visual and physical domain gap. While simulation environments based on real-world reconstructions close the visual domain gap,  the perfect agent motion and pose sensor in the simulation were unrealistic. 
+In order to bridge this physical domain gap, we collect motion and sensor data in the real-world to create realistic noise models. We then train our exploration policy with noisy motion and pose sensors in the simulation using these noise models. Furthermore, due to the modularity, the pose estimation and global policy work directly on the map space, which is domain invariant. This allowed us to successfully transfer the trained Active Neural SLAM policy on the Locobot hardware platform using the PyRobot API. 
+Exploration using Active Neural SLAM in the real-world. The observations seen by the agent are shown on the left and the predicted map and pose are shown on the right. The obstacles are shown in green, explored are is shown in light blue, the long-term goal is shown in dark blue and agent pose and trajectory are shown in red. The Active Neural SLAM model is able to explore the whole apartment efficiently.
+
+Discussion and Next Steps
+We presented a modular navigation system which leverages the strengths of both classical and learning-based methods. The use of learning provides flexibility with respect to input modalities (in the SLAM module), leverages structural regularities of the world (in global policies), and provides robustness to errors in state estimation (in local policies). It leads to significantly higher performance and up to 75 times better sample efficiency as compared to end-to-end reinforcement learning. Domain invariance of pose estimation & global policy, and realistic motion & sensor noise models allowed us to successfully transfer the model to the real-world. The Active Neural SLAM model can be further improved by incorporating explicit semantics and adding relocalization capabilities.
+Incorporating Semantics: The current model only builds an obstacle map, without any explicit semantics. Incorporating semantics in the map and learning task-specific exploration are some challenges to tackle tasks such as Image Goal or Object Goal Navigation.
+Relocalization: The current model can be coupled with prior relocalization techniques to add the ability to relocalize in a previously constructed map for more efficient navigation in known environments. Relocalization can also help in better pose estimation by mitigating pose drift.
+Interested in more details?
+Check out the links to the paper, complete codebase with pre-trained models, talk, slides and project webpage below.
+
+Paper
+Code
+Talk
+Slides
+Webpage
+
+This blog post was based on the following paper :Devendra Singh Chaplot, Dhiraj Gandhi, Saurabh Gupta, Abhinav Gupta, and Ruslan Salakhutdinov. Learning To Explore Using Active Neural SLAM. In International Conference on Learning Representations (ICLR), 2020.
+Efficient exploration in unknown environments
+
+In the PointGoal task, the objective is to navigate to a goal location whose relative coordinates are given as input. The Active Neural SLAM model can be directly transferred to the PointGoal task without any additional training by just changing the Global policy to always output the PointGoal coordinates as the long-term goal. The ANS model trained for Exploration, when transferred to the PointGoal task can outperform all the baselines trained for the PointGoal Task by a large margin. It  was the winner of the CVPR 2019 Habitat PointGoal Navigation Challenge.
+
+
+PointGoal Task
+
+
+In the PointGoal task, the objective is to navigate to a goal location whose relative coordinates are given as input. The Active Neural SLAM model can be directly transferred to the PointGoal task without any additional training by just changing the Global policy to always output the PointGoal coordinates as the long-term goal. The ANS model trained for Exploration, when transferred to the PointGoal task can outperform all the baselines trained for the PointGoal Task by a large margin. It  was the winner of the CVPR 2019 Habitat PointGoal Navigation Challenge.
+
+PointGoal Task
+Exploration using Active Neural SLAM in the real-world. The observations seen by the agent are shown on the left and the predicted map and pose are shown on the right. The obstacles are shown in green, explored are is shown in light blue, the long-term goal is shown in dark blue and agent pose and trajectory are shown in red. The Active Neural SLAM model is able to explore the whole apartment efficiently.
+Paper
+Code
+Talk
+Slides
+Webpage
+PaperCodeTalkSlidesWebpageplanningreinforcement learningroboticssim2realSLAM
+♥268
+ 14786
+You Might Also Like
+
+
+FACT Diagnostic: How to Better Understand Trade-offs Involving Group Fairness
+October 12, 2020
+
+
+
+Are Sixteen Heads Really Better than One?
+March 20, 2020
+
+
+
+Two Experiments in Peer Review: Posting Preprints and Citation Bias
+April 1, 2022
+
+
+
+FACT Diagnostic: How to Better Understand Trade-offs Involving Group Fairness
+October 12, 2020
+
+
+Are Sixteen Heads Really Better than One?
+March 20, 2020
+
+
+Two Experiments in Peer Review: Posting Preprints and Citation Bias
+April 1, 2022
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+
+No Comments 
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+No Comments
+Leave a Reply Cancel ReplyName * 
+Email * 
+Website 
+ Save my name, email, and website in this browser for the next time I comment.
+ 
+
+ 
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+ 
+
+ [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+  [instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+[instagram-feed num=6 cols=6 imagepadding=0 disablemobile=true showbutton=false showheader=false followtext=”Follow @Mint_Theme”]
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+
+
+
+
+
+Legal Info | www.cmu.edu
+
+2018 © Machine Learning | Carnegie Mellon University
+
+
+
