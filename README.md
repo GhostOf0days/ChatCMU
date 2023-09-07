@@ -16,5 +16,6 @@ PINECONEKEY = '...'
 - add your source urls to scraper/main.py
 - create a folder named `text`
 - run scraper/main.py
+- run scraper/cleanup.py
 - run pinecone/embedings.ipynb
-- host pinecone/index.html on your website
+- host pinecone/index.py on your website
